@@ -1,6 +1,6 @@
 # Yuhui Xie's Compiler Principle lab project
 
-## process
+## changelog
 
 ### 10.10
 1.environment set up, the compiler now recognize **int main() { return 0; }**  
