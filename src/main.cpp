@@ -1,6 +1,8 @@
 #include <cassert>
 #include <cstdio>
 #include <iostream>
+#include <fstream>
+#include <sstream>
 #include <memory>
 #include <string>
 #include "ast.h"
@@ -27,14 +29,28 @@ int main(int argc, const char *argv[])
   // 打开输入文件, 并且指定 lexer 在解析的时候读取这个文件
   yyin = fopen(input, "r");
   assert(yyin);
-
+  // 打开输出文件, 准备写入
+  ofstream fout(output);
+  assert(fout.is_open());
   // 调用 parser 函数, parser 函数会进一步调用 lexer 解析输入文件的
   unique_ptr<BaseAST> ast;
   auto ret = yyparse(ast);
   assert(!ret);
-
-  // 输出解析得到的 AST, 其实就是个字符串
+  // 调用Dump函数, 把结果输出到ss
+  stringstream ss;
+  streambuf *oldcoutbuf = cout.rdbuf(ss.rdbuf());
   ast->Dump();
-  cout << endl;
+  // 输出重定向到文件
+  cout.rdbuf(fout.rdbuf());
+  if (string(mode) == "-koopa")
+  {
+    cout << ss.str();
+  }
+  else if (string(mode) == "-riscv")
+  {
+  }
+  cout.rdbuf(oldcoutbuf);
+  fout.close();
+
   return 0;
 }

@@ -1,6 +1,6 @@
 #pragma once
 #include <iostream>
-using namespace std;
+#include <memory>
 // 所有 AST 的基类
 class BaseAST
 {
@@ -19,9 +19,9 @@ public:
 
     void Dump() const override
     {
-        std::cout << "CompUnitAST { ";
+        // std::cout << "CompUnitAST { ";
         func_def->Dump();
-        std::cout << " }";
+        // std::cout << " }";
     }
 };
 
@@ -35,11 +35,19 @@ public:
 
     void Dump() const override
     {
-        std::cout << "FuncDefAST { ";
+        // std::cout << "FuncDefAST { ";
+        std::cout << "fun ";
+        std::cout << "@main";
         func_type->Dump();
-        std::cout << ", " << ident << ", ";
+        std::cout << "(): i32 ";
+        // std::cout << ", " << ident << ", ";
+        std::cout << "{" << std::endl;
+        std::cout << "%" << "entry:" << std::endl;
+        std::cout << "  ret ";
         block->Dump();
-        std::cout << " }";
+        std::cout << std::endl;
+        std::cout << "}";
+        // std::cout << " }";
     }
 };
 
@@ -51,9 +59,9 @@ public:
 
     void Dump() const override
     {
-        std::cout << "FuncTypeAST { ";
-        std::cout << intstr;
-        std::cout << " }";
+        // std::cout << "FuncTypeAST { ";
+        // std::cout << intstr;
+        // std::cout << " }";
     }
 };
 
@@ -65,9 +73,9 @@ public:
 
     void Dump() const override
     {
-        std::cout << "BlockAST { ";
+        // std::cout << "BlockAST { ";
         stmt->Dump();
-        std::cout << " }";
+        // std::cout << " }";
     }
 };
 
@@ -79,8 +87,8 @@ public:
 
     void Dump() const override
     {
-        std::cout << "StmtAST { ";
+        // std::cout << "StmtAST { ";
         std::cout << numberstr;
-        std::cout << " }";
+        // std::cout << " }";
     }
 };
