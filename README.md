@@ -1,4 +1,4 @@
-# 基于 Makefile 的 SysY 编译器项目模板
+# Yuhui Xie's Compiler Principle lab project
 
 该仓库中存放了一个基于 Makefile 的 SysY 编译器项目的模板, 你可以在该模板的基础上进行进一步的开发.
 
