@@ -8,3 +8,7 @@
 3. finished lv1:  
    a. redirecting cout to output file  
    b. blockcomment
+
+### 10.22
+1. visit raw program  
+2. output riscv

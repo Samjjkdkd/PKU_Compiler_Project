@@ -8,6 +8,7 @@ public:
     virtual ~BaseAST() = default;
 
     virtual void Dump() const = 0;
+    virtual void GenerateIR() const = 0;
 };
 
 // CompUnit 是 BaseAST
@@ -19,9 +20,13 @@ public:
 
     void Dump() const override
     {
-        // std::cout << "CompUnitAST { ";
+        std::cout << "CompUnitAST { ";
         func_def->Dump();
-        // std::cout << " }";
+        std::cout << " }";
+    }
+    void GenerateIR() const override
+    {
+        func_def->GenerateIR();
     }
 };
 
@@ -35,19 +40,24 @@ public:
 
     void Dump() const override
     {
-        // std::cout << "FuncDefAST { ";
+        std::cout << "FuncDefAST { ";
+        func_type->Dump();
+        std::cout << ", " << ident << ", ";
+        block->Dump();
+        std::cout << " }";
+    }
+    void GenerateIR() const override
+    {
         std::cout << "fun ";
         std::cout << "@main";
-        func_type->Dump();
+        func_type->GenerateIR();
         std::cout << "(): i32 ";
-        // std::cout << ", " << ident << ", ";
         std::cout << "{" << std::endl;
         std::cout << "%" << "entry:" << std::endl;
         std::cout << "  ret ";
-        block->Dump();
+        block->GenerateIR();
         std::cout << std::endl;
         std::cout << "}";
-        // std::cout << " }";
     }
 };
 
@@ -59,9 +69,12 @@ public:
 
     void Dump() const override
     {
-        // std::cout << "FuncTypeAST { ";
-        // std::cout << intstr;
-        // std::cout << " }";
+        std::cout << "FuncTypeAST { ";
+        std::cout << intstr;
+        std::cout << " }";
+    }
+    void GenerateIR() const override
+    {
     }
 };
 
@@ -73,9 +86,13 @@ public:
 
     void Dump() const override
     {
-        // std::cout << "BlockAST { ";
+        std::cout << "BlockAST { ";
         stmt->Dump();
-        // std::cout << " }";
+        std::cout << " }";
+    }
+    void GenerateIR() const override
+    {
+        stmt->GenerateIR();
     }
 };
 
@@ -87,8 +104,12 @@ public:
 
     void Dump() const override
     {
-        // std::cout << "StmtAST { ";
+        std::cout << "StmtAST { ";
         std::cout << numberstr;
-        // std::cout << " }";
+        std::cout << " }";
+    }
+    void GenerateIR() const override
+    {
+        std::cout << numberstr;
     }
 };
