@@ -32,7 +32,7 @@ Hexadecimal   0[xX][0-9a-fA-F]+
 
 {WhiteSpace}    { /* 忽略, 不做任何操作 */ }
 {LineComment}   { /* 忽略, 不做任何操作 */ }
-{BlockComment}   { /* 忽略, 不做任何操作 */ }
+{BlockComment}  { /* 忽略, 不做任何操作 */ }
 
 "int"           { return INT; }
 "return"        { return RETURN; }
@@ -42,6 +42,22 @@ Hexadecimal   0[xX][0-9a-fA-F]+
 {Decimal}       { yylval.int_val = strtol(yytext, nullptr, 0); return INT_CONST; }
 {Octal}         { yylval.int_val = strtol(yytext, nullptr, 0); return INT_CONST; }
 {Hexadecimal}   { yylval.int_val = strtol(yytext, nullptr, 0); return INT_CONST; }
+
+"<"             { yylval.str_val = new string(yytext); return LT; }        // 小于号
+">"             { yylval.str_val = new string(yytext); return GT; }        // 大于号
+"-"             { yylval.str_val = new string(yytext); return MINOR; }    // 负号
+"+"             { yylval.str_val = new string(yytext); return PLUS; }     // 加号
+"*"             { yylval.str_val = new string(yytext); return MUL; }      // 乘号
+"/"             { yylval.str_val = new string(yytext); return DIV; }      // 除号
+"%"             { yylval.str_val = new string(yytext); return MOD; }      // 取模
+"!"             { yylval.str_val = new string(yytext); return NOT; }      // 逻辑非
+
+"<="            { yylval.str_val = new string(yytext); return LE; }        // 小于等于
+">="            { yylval.str_val = new string(yytext); return GE; }        // 大于等于
+"=="            { yylval.str_val = new string(yytext); return EQ; }        // 等于
+"!="            { yylval.str_val = new string(yytext); return NE; }        // 不等于
+"&&"            { yylval.str_val = new string(yytext); return LAND; }      // 逻辑与
+"||"            { yylval.str_val = new string(yytext); return LOR; }       // 逻辑或
 
 .               { return yytext[0]; } /* 返回单个字符 */
 

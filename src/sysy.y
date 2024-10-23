@@ -37,12 +37,16 @@ using namespace std;
 // lexer 返回的所有 token 种类的声明
 // 注意 IDENT 和 INT_CONST 会返回 token 的值, 分别对应 str_val 和 int_val
 %token INT RETURN
+%token <str_val> LE GE EQ NE LAND LOR
+%token <str_val> LT GT MINOR PLUS MUL DIV MOD NOT
 %token <str_val> IDENT
 %token <int_val> INT_CONST
 
 // 非终结符的类型定义
-%type <ast_val> FuncDef FuncType Block Stmt Exp PrimaryExp UnaryExp MulExp AddExp
-%type <str_val> UnaryOp MulOp AddOp
+%type <ast_val> FuncDef FuncType Block Stmt 
+%type <ast_val> Exp PrimaryExp UnaryExp MulExp AddExp
+%type <ast_val> RelExp EqExp LAndExp LOrExp
+%type <str_val> UnaryOp MulOp AddOp RelOp EqOp
 %type <int_val> Number
 
 %%
@@ -105,9 +109,9 @@ Stmt
   ;
 
 Exp
-  : AddExp {
+  : LOrExp {
     auto ast = new ExpAST();
-    ast->addexp = unique_ptr<BaseAST>($1);
+    ast->lorexp = unique_ptr<BaseAST>($1);
     $$ = ast;
   }
   ;
@@ -125,6 +129,7 @@ PrimaryExp
     ast->number = $1;
     $$ = ast;
   }
+  ;
 
 Number
   : INT_CONST {
@@ -142,21 +147,17 @@ UnaryExp
   | UnaryOp UnaryExp {
     auto ast = new UnaryExpAST();
     ast->type = 2;
-    ast->unaryop = $1;
+    ast->unaryop = *unique_ptr<string>($1);
     ast->unaryexp = unique_ptr<BaseAST>($2);
     $$ = ast;
   }
   ;
 
 UnaryOp
-  : '+' {
-    $$ = new string("+");
-  }
-  | '-' {
-    $$ = new string("-");
-  }
-  | '!' {
-    $$ = new string("!");
+  : PLUS 
+  | MINOR 
+  | NOT {
+    $$ = $1;
   }
   ;
 
@@ -170,21 +171,18 @@ MulExp
   | MulExp MulOp UnaryExp {
     auto ast = new MulExpAST();
     ast->type = 2;
-    ast->mulop = $2;
+    ast->mulop = *unique_ptr<string>($2);
     ast->mulexp = unique_ptr<BaseAST>($1);
     ast->unaryexp = unique_ptr<BaseAST>($3);
     $$ = ast;
   }
+  ;
 
 MulOp
-  : '*' {
-    $$ = new string("*");
-  }
-  | '/' {
-    $$ = new string("/");
-  }
-  | '%' {
-    $$ = new string("%");
+  : MUL
+  | DIV
+  | MOD {
+    $$ = $1;
   }
   ;
 
@@ -198,20 +196,102 @@ AddExp
   | AddExp AddOp MulExp {
     auto ast = new AddExpAST();
     ast->type = 2;
-    ast->addop = $2;
+    ast->addop = *unique_ptr<string>($2);
     ast->addexp = unique_ptr<BaseAST>($1);
     ast->mulexp = unique_ptr<BaseAST>($3);
     $$ = ast;
   }
+  ;
 
 AddOp
-  : '+' {
-    $$ = new string("+");
-  }
-  | '-' {
-    $$ = new string("-");
+  : PLUS
+  | MINOR {
+    $$ = $1;
   }
   ;
+
+RelExp
+  : AddExp {
+    auto ast = new RelExpAST();
+    ast->type = 1;
+    ast->addexp = unique_ptr<BaseAST>($1);
+    $$ = ast;
+  }
+  | RelExp RelOp AddExp {
+    auto ast = new RelExpAST();
+    ast->type = 2;
+    ast->relop = *unique_ptr<string>($2);
+    ast->relexp = unique_ptr<BaseAST>($1);
+    ast->addexp = unique_ptr<BaseAST>($3);
+    $$ = ast;
+  }
+  ;
+
+RelOp
+  : LT
+  | GT
+  | LE
+  | GE {
+    $$ = $1;
+  }
+  ;
+
+EqExp
+  : RelExp {
+    auto ast = new EqExpAST();
+    ast->type = 1;
+    ast->relexp = unique_ptr<BaseAST>($1);
+    $$ = ast;
+  }
+  | EqExp EqOp RelExp {
+    auto ast = new EqExpAST();
+    ast->type = 2;
+    ast->eqop = *unique_ptr<string>($2);
+    ast->eqexp = unique_ptr<BaseAST>($1);
+    ast->relexp = unique_ptr<BaseAST>($3);
+    $$ = ast;
+  }
+  ;
+
+EqOp
+  : EQ 
+  | NE {
+    $$ = $1;
+  }
+  ;
+
+LAndExp
+  : EqExp {
+    auto ast = new LAndExpAST();
+    ast->type = 1;
+    ast->eqexp = unique_ptr<BaseAST>($1);
+    $$ = ast;
+  }
+  | LAndExp LAND EqExp {
+    auto ast = new LAndExpAST();
+    ast->type = 2;
+    ast->landexp = unique_ptr<BaseAST>($1);
+    ast->eqexp = unique_ptr<BaseAST>($3);
+    $$ = ast;
+  }
+  ;
+
+LOrExp
+  : LAndExp {
+    auto ast = new LOrExpAST();
+    ast->type = 1;
+    ast->landexp = unique_ptr<BaseAST>($1);
+    $$ = ast;
+  }
+  | LOrExp LOR LAndExp {
+    auto ast = new LOrExpAST();
+    ast->type = 2;
+    ast->lorexp = unique_ptr<BaseAST>($1);
+    ast->landexp = unique_ptr<BaseAST>($3);
+    $$ = ast;
+  }
+  ;
+
 %%
 
 // 定义错误处理函数, 其中第二个参数是错误信息

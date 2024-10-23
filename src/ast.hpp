@@ -1,6 +1,26 @@
 #pragma once
 #include <iostream>
 #include <memory>
+// CompUnit    ::= FuncDef;
+// FuncDef     ::= FuncType IDENT "(" ")" Block;
+// FuncType    ::= "int";
+// Block       ::= "{" Stmt "}";
+// Stmt        ::= "return" Exp ";";
+// Exp         ::= LOrExp;
+// PrimaryExp  ::= "(" Exp ")" | Number;
+// Number      ::= INT_CONST;
+// UnaryExp    ::= PrimaryExp | UnaryOp UnaryExp;
+// UnaryOp     ::= "+" | "-" | "!";
+// MulExp      ::= UnaryExp | MulExp MulOp UnaryExp;
+// MulOp       ::= "*" | "/" | "%";
+// AddExp      ::= MulExp | AddExp AddOp MulExp;
+// AddOp       ::= "+" | "-";
+// RelExp      ::= AddExp | RelExp RelOp AddExp;
+// RelOp       ::= "<" | "<=" | ">" | ">=";
+// EqExp       ::= RelExp | EqExp EqOp RelExp;
+// EqOp        ::= "==" | "!=";
+// LAndExp     ::= EqExp | LAndExp "&&" EqExp;
+// LOrExp      ::= LAndExp | LOrExp "||" LAndExp;
 // 所有 AST 的基类
 class BaseAST
 {
@@ -14,7 +34,6 @@ public:
 class CompUnitAST : public BaseAST
 {
 public:
-    // 用智能指针管理对象
     std::unique_ptr<BaseAST> func_def;
     // void Dump() const override;
     void GenerateIR() const override;
@@ -35,7 +54,6 @@ public:
 class FuncTypeAST : public BaseAST
 {
 public:
-    // 用智能指针管理对象
     std::string intstr;
     // void Dump() const override;
     void GenerateIR() const override;
@@ -45,7 +63,6 @@ public:
 class BlockAST : public BaseAST
 {
 public:
-    // 用智能指针管理对象
     std::unique_ptr<BaseAST> stmt;
     // void Dump() const override;
     void GenerateIR() const override;
@@ -60,11 +77,11 @@ public:
     void GenerateIR() const override;
 };
 
-// Exp         ::= AddExp;
+// Exp         ::= LOrExp;
 class ExpAST : public BaseAST
 {
 public:
-    std::unique_ptr<BaseAST> addexp;
+    std::unique_ptr<BaseAST> lorexp;
     // void Dump() const override;
     void GenerateIR() const override;
 };
@@ -73,7 +90,6 @@ public:
 class PrimaryExpAST : public BaseAST
 {
 public:
-    // 用智能指针管理对象
     std::int32_t type;
     std::unique_ptr<BaseAST> exp;
     std::int32_t number;
@@ -87,9 +103,8 @@ public:
 class UnaryExpAST : public BaseAST
 {
 public:
-    // 用智能指针管理对象
     std::int32_t type;
-    std::string *unaryop;
+    std::string unaryop;
     std::unique_ptr<BaseAST> primaryexp;
     std::unique_ptr<BaseAST> unaryexp;
     // void Dump() const override;
@@ -100,9 +115,8 @@ public:
 class MulExpAST : public BaseAST
 {
 public:
-    // 用智能指针管理对象
     std::int32_t type;
-    std::string *mulop;
+    std::string mulop;
     std::unique_ptr<BaseAST> mulexp;
     std::unique_ptr<BaseAST> unaryexp;
     // void Dump() const override;
@@ -113,12 +127,55 @@ public:
 class AddExpAST : public BaseAST
 {
 public:
-    // 用智能指针管理对象
     std::int32_t type;
-    std::string *addop;
+    std::string addop;
     std::unique_ptr<BaseAST> addexp;
     std::unique_ptr<BaseAST> mulexp;
     // void Dump() const override;
     void GenerateIR() const override;
 };
 // AddOp :: = "+" | "-";
+// RelExp      ::= AddExp | RelExp RelOp AddExp;
+class RelExpAST : public BaseAST
+{
+public:
+    std::int32_t type;
+    std::string relop;
+    std::unique_ptr<BaseAST> relexp;
+    std::unique_ptr<BaseAST> addexp;
+    // void Dump() const override;
+    void GenerateIR() const override;
+};
+// RelOp       ::= "<" | "<=" | ">" | ">=";
+// EqExp       ::= RelExp | EqExp EqOp RelExp;
+class EqExpAST : public BaseAST
+{
+public:
+    std::int32_t type;
+    std::string eqop;
+    std::unique_ptr<BaseAST> eqexp;
+    std::unique_ptr<BaseAST> relexp;
+    // void Dump() const override;
+    void GenerateIR() const override;
+};
+// EqOp        ::= "==" | "!=";
+// LAndExp     ::= EqExp | LAndExp "&&" EqExp;
+class LAndExpAST : public BaseAST
+{
+public:
+    std::int32_t type;
+    std::unique_ptr<BaseAST> landexp;
+    std::unique_ptr<BaseAST> eqexp;
+    // void Dump() const override;
+    void GenerateIR() const override;
+};
+// LOrExp      ::= LAndExp | LOrExp "||" LAndExp;
+class LOrExpAST : public BaseAST
+{
+public:
+    std::int32_t type;
+    std::unique_ptr<BaseAST> lorexp;
+    std::unique_ptr<BaseAST> landexp;
+    // void Dump() const override;
+    void GenerateIR() const override;
+};

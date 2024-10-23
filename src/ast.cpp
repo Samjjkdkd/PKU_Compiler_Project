@@ -37,7 +37,7 @@ void StmtAST::GenerateIR() const
 
 void ExpAST::GenerateIR() const
 {
-    addexp->GenerateIR();
+    lorexp->GenerateIR();
 }
 
 void PrimaryExpAST::GenerateIR() const
@@ -64,12 +64,16 @@ void UnaryExpAST::GenerateIR() const
     else if (type == 2)
     {
         unaryexp->GenerateIR();
+        if (unaryop == "+")
+        {
+            return;
+        }
         std::cout << "  %" << tempsymbol << " = ";
-        if (*unaryop == "-")
+        if (unaryop == "-")
         {
             std::cout << "sub";
         }
-        else if (*unaryop == "!")
+        else if (unaryop == "!")
         {
             std::cout << "eq";
         }
@@ -91,15 +95,15 @@ void MulExpAST::GenerateIR() const
         unaryexp->GenerateIR();
         int second = tempsymbol - 1;
         std::cout << "  %" << tempsymbol << " = ";
-        if (*mulop == "*")
+        if (mulop == "*")
         {
             std::cout << "mul";
         }
-        else if (*mulop == "/")
+        else if (mulop == "/")
         {
             std::cout << "div";
         }
-        else if (*mulop == "%")
+        else if (mulop == "%")
         {
             std::cout << "mod";
         }
@@ -122,11 +126,11 @@ void AddExpAST::GenerateIR() const
         mulexp->GenerateIR();
         int second = tempsymbol - 1;
         std::cout << "  %" << tempsymbol << " = ";
-        if (*addop == "+")
+        if (addop == "+")
         {
             std::cout << "add";
         }
-        else if (*addop == "-")
+        else if (addop == "-")
         {
             std::cout << "sub";
         }
@@ -135,6 +139,123 @@ void AddExpAST::GenerateIR() const
         tempsymbol++;
     }
 }
+
+void RelExpAST::GenerateIR() const
+{
+    if (type == 1)
+    {
+        addexp->GenerateIR();
+    }
+    else if (type == 2)
+    {
+        relexp->GenerateIR();
+        int first = tempsymbol - 1;
+        addexp->GenerateIR();
+        int second = tempsymbol - 1;
+        std::cout << "  %" << tempsymbol << " = ";
+        if (relop == "<")
+        {
+            std::cout << "lt";
+        }
+        else if (relop == ">")
+        {
+            std::cout << "gt";
+        }
+        else if (relop == "<=")
+        {
+            std::cout << "le";
+        }
+        else if (relop == ">=")
+        {
+            std::cout << "ge";
+        }
+        std::cout << " %" << first;
+        std::cout << ", %" << second << std::endl;
+        tempsymbol++;
+    }
+}
+
+void EqExpAST::GenerateIR() const
+{
+    if (type == 1)
+    {
+        relexp->GenerateIR();
+    }
+    else if (type == 2)
+    {
+        eqexp->GenerateIR();
+        int first = tempsymbol - 1;
+        relexp->GenerateIR();
+        int second = tempsymbol - 1;
+        std::cout << "  %" << tempsymbol << " = ";
+        if (eqop == "==")
+        {
+            std::cout << "eq";
+        }
+        else if (eqop == "!=")
+        {
+            std::cout << "ne";
+        }
+        std::cout << " %" << first;
+        std::cout << ", %" << second << std::endl;
+        tempsymbol++;
+    }
+}
+
+void LAndExpAST::GenerateIR() const
+{
+    if (type == 1)
+    {
+        eqexp->GenerateIR();
+    }
+    else if (type == 2)
+    {
+        // A!=0 & B!=0
+        landexp->GenerateIR();
+        int first = tempsymbol - 1;
+        eqexp->GenerateIR();
+        int second = tempsymbol - 1;
+        std::cout << "  %" << tempsymbol << " = ne ";
+        std::cout << "%" << first << ", 0" << std::endl;
+        tempsymbol++;
+        first = tempsymbol - 1;
+        std::cout << "  %" << tempsymbol << " = ne ";
+        std::cout << "%" << second << ", 0" << std::endl;
+        tempsymbol++;
+        second = tempsymbol - 1;
+        std::cout << "  %" << tempsymbol << " = and ";
+        std::cout << "%" << first << ", %" << second << std::endl;
+        tempsymbol++;
+    }
+}
+
+void LOrExpAST::GenerateIR() const
+{
+    if (type == 1)
+    {
+        landexp->GenerateIR();
+    }
+    else if (type == 2)
+    {
+        // A!=0 | B!=0
+        lorexp->GenerateIR();
+        int first = tempsymbol - 1;
+        landexp->GenerateIR();
+        int second = tempsymbol - 1;
+        std::cout << "  %" << tempsymbol << " = ne ";
+        std::cout << "%" << first << ", 0" << std::endl;
+        tempsymbol++;
+        first = tempsymbol - 1;
+        std::cout << "  %" << tempsymbol << " = ne ";
+        std::cout << "%" << second << ", 0" << std::endl;
+        tempsymbol++;
+        second = tempsymbol - 1;
+        std::cout << "  %" << tempsymbol << " = or ";
+        std::cout << "%" << first << ", %" << second << std::endl;
+        tempsymbol++;
+    }
+}
+
 // Dump
 /*
 void CompUnitAST::Dump() const
