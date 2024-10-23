@@ -1,7 +1,7 @@
 %code requires {
   #include <memory>
   #include <string>
-  #include "ast.hpp"
+  #include "ast.h"
 }
 
 %{
@@ -9,7 +9,7 @@
 #include <iostream>
 #include <memory>
 #include <string>
-#include "ast.hpp"
+#include "ast.h"
 
 // 声明 lexer 函数和错误处理函数
 int yylex();
@@ -111,7 +111,7 @@ Stmt
 Exp
   : LOrExp {
     auto ast = new ExpAST();
-    ast->lorexp = unique_ptr<BaseAST>($1);
+    ast->lor_exp = unique_ptr<BaseAST>($1);
     $$ = ast;
   }
   ;
@@ -141,14 +141,14 @@ UnaryExp
   : PrimaryExp {
     auto ast = new UnaryExpAST();
     ast->type = 1;
-    ast->primaryexp = unique_ptr<BaseAST>($1);
+    ast->primary_exp = unique_ptr<BaseAST>($1);
     $$ = ast;
   }
   | UnaryOp UnaryExp {
     auto ast = new UnaryExpAST();
     ast->type = 2;
-    ast->unaryop = *unique_ptr<string>($1);
-    ast->unaryexp = unique_ptr<BaseAST>($2);
+    ast->unary_op = *unique_ptr<string>($1);
+    ast->unary_exp = unique_ptr<BaseAST>($2);
     $$ = ast;
   }
   ;
@@ -164,16 +164,16 @@ UnaryOp
 MulExp
   : UnaryExp {
     auto ast = new MulExpAST();
-    ast->unaryexp = unique_ptr<BaseAST>($1);
+    ast->unary_exp = unique_ptr<BaseAST>($1);
     ast->type = 1;
     $$ = ast;
   }
   | MulExp MulOp UnaryExp {
     auto ast = new MulExpAST();
     ast->type = 2;
-    ast->mulop = *unique_ptr<string>($2);
-    ast->mulexp = unique_ptr<BaseAST>($1);
-    ast->unaryexp = unique_ptr<BaseAST>($3);
+    ast->mul_op = *unique_ptr<string>($2);
+    ast->mul_exp = unique_ptr<BaseAST>($1);
+    ast->unary_exp = unique_ptr<BaseAST>($3);
     $$ = ast;
   }
   ;
@@ -190,15 +190,15 @@ AddExp
   : MulExp {
     auto ast = new AddExpAST();
     ast->type = 1;
-    ast->mulexp = unique_ptr<BaseAST>($1);
+    ast->mul_exp = unique_ptr<BaseAST>($1);
     $$ = ast;
   }
   | AddExp AddOp MulExp {
     auto ast = new AddExpAST();
     ast->type = 2;
-    ast->addop = *unique_ptr<string>($2);
-    ast->addexp = unique_ptr<BaseAST>($1);
-    ast->mulexp = unique_ptr<BaseAST>($3);
+    ast->add_op = *unique_ptr<string>($2);
+    ast->add_exp = unique_ptr<BaseAST>($1);
+    ast->mul_exp = unique_ptr<BaseAST>($3);
     $$ = ast;
   }
   ;
@@ -214,15 +214,15 @@ RelExp
   : AddExp {
     auto ast = new RelExpAST();
     ast->type = 1;
-    ast->addexp = unique_ptr<BaseAST>($1);
+    ast->add_exp = unique_ptr<BaseAST>($1);
     $$ = ast;
   }
   | RelExp RelOp AddExp {
     auto ast = new RelExpAST();
     ast->type = 2;
-    ast->relop = *unique_ptr<string>($2);
-    ast->relexp = unique_ptr<BaseAST>($1);
-    ast->addexp = unique_ptr<BaseAST>($3);
+    ast->rel_op = *unique_ptr<string>($2);
+    ast->rel_exp = unique_ptr<BaseAST>($1);
+    ast->add_exp = unique_ptr<BaseAST>($3);
     $$ = ast;
   }
   ;
@@ -240,15 +240,15 @@ EqExp
   : RelExp {
     auto ast = new EqExpAST();
     ast->type = 1;
-    ast->relexp = unique_ptr<BaseAST>($1);
+    ast->rel_exp = unique_ptr<BaseAST>($1);
     $$ = ast;
   }
   | EqExp EqOp RelExp {
     auto ast = new EqExpAST();
     ast->type = 2;
-    ast->eqop = *unique_ptr<string>($2);
-    ast->eqexp = unique_ptr<BaseAST>($1);
-    ast->relexp = unique_ptr<BaseAST>($3);
+    ast->eq_op = *unique_ptr<string>($2);
+    ast->eq_exp = unique_ptr<BaseAST>($1);
+    ast->rel_exp = unique_ptr<BaseAST>($3);
     $$ = ast;
   }
   ;
@@ -264,14 +264,14 @@ LAndExp
   : EqExp {
     auto ast = new LAndExpAST();
     ast->type = 1;
-    ast->eqexp = unique_ptr<BaseAST>($1);
+    ast->eq_exp = unique_ptr<BaseAST>($1);
     $$ = ast;
   }
   | LAndExp LAND EqExp {
     auto ast = new LAndExpAST();
     ast->type = 2;
-    ast->landexp = unique_ptr<BaseAST>($1);
-    ast->eqexp = unique_ptr<BaseAST>($3);
+    ast->land_exp = unique_ptr<BaseAST>($1);
+    ast->eq_exp = unique_ptr<BaseAST>($3);
     $$ = ast;
   }
   ;
@@ -280,14 +280,14 @@ LOrExp
   : LAndExp {
     auto ast = new LOrExpAST();
     ast->type = 1;
-    ast->landexp = unique_ptr<BaseAST>($1);
+    ast->land_exp = unique_ptr<BaseAST>($1);
     $$ = ast;
   }
   | LOrExp LOR LAndExp {
     auto ast = new LOrExpAST();
     ast->type = 2;
-    ast->lorexp = unique_ptr<BaseAST>($1);
-    ast->landexp = unique_ptr<BaseAST>($3);
+    ast->lor_exp = unique_ptr<BaseAST>($1);
+    ast->land_exp = unique_ptr<BaseAST>($3);
     $$ = ast;
   }
   ;

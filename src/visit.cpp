@@ -1,107 +1,268 @@
-#include <iostream>
-#include <cassert>
-#include "koopa.h"
-#include "visit.hpp"
-using namespace std;
-// 函数声明略
-// ...
+#include "visit.h"
 
-// 访问 raw program
-void Visit(const koopa_raw_program_t &program)
+#include <cassert>
+#include <cstring>
+#include <iostream>
+
+void RISCV_Builder::Env::state_init()
 {
-    // 执行一些其他的必要操作
-    // ...
-    // 访问所有全局变量
-    Visit(program.values);
-    // 访问所有函数
-    Visit(program.funcs);
+    for (int i = 0; i < 8; ++i)
+    {
+        register_state_map["a" + std::to_string(i)] = UNUSED;
+    }
+    for (int i = 0; i < 7; ++i)
+    {
+        register_state_map["t" + std::to_string(i)] = UNUSED;
+    }
 }
 
-// 访问 raw slice
-void Visit(const koopa_raw_slice_t &slice)
+void RISCV_Builder::Env::state_free(std::string reg)
 {
+    register_state_map[reg] = UNUSED;
+}
+
+std::string RISCV_Builder::Env::register_check(koopa_raw_value_t raw)
+{
+    if (register_alloc_map.find(raw) != register_alloc_map.end())
+    {
+        return register_alloc_map[raw];
+    }
+    else
+    {
+        return "Null";
+    }
+}
+
+std::string RISCV_Builder::Env::register_alloc(koopa_raw_value_t raw)
+{
+    if (register_alloc_map.find(raw) != register_alloc_map.end())
+    {
+        return register_alloc_map[raw];
+    }
+    for (int i = 0; i < 7; ++i)
+    {
+        if (register_state_map["t" + std::to_string(i)] == UNUSED)
+        {
+            register_state_map["t" + std::to_string(i)] = USED;
+            register_alloc_map[raw] = "t" + std::to_string(i);
+            return "t" + std::to_string(i);
+        }
+    }
+    for (int i = 0; i < 8; ++i)
+    {
+        if (register_state_map["a" + std::to_string(i)] == UNUSED)
+        {
+            register_state_map["a" + std::to_string(i)] = USED;
+            register_alloc_map[raw] = "a" + std::to_string(i);
+            return "a" + std::to_string(i);
+        }
+    }
+    return "Null";
+}
+
+std::string RISCV_Builder::load_register(koopa_raw_value_t value,
+                                         std::string reg)
+{
+    std::string ret = "";
+    std::string rs1 = env.register_check(value);
+    if (rs1 != "Null")
+    {
+        if (value->kind.tag == KOOPA_RVT_INTEGER)
+        {
+            ret += "  li " + reg + ", " +
+                   std::to_string(value->kind.data.integer.value) + "\n";
+        }
+        else if (rs1 != reg)
+        {
+            ret += "  mv " + reg + ", " + rs1 + "\n";
+        }
+    }
+    else
+    {
+        if (value->kind.tag == KOOPA_RVT_INTEGER)
+        {
+            ret += "  li " + reg + ", " +
+                   std::to_string(value->kind.data.integer.value) + "\n";
+        }
+    }
+    return ret;
+}
+
+std::string RISCV_Builder::raw_visit(const koopa_raw_program_t &raw)
+{
+    std::string ret = "  .text\n  .globl main\n";
+    // TODO: values
+    ret += raw_visit(raw.funcs);
+    return ret;
+}
+
+std::string RISCV_Builder::raw_visit(const koopa_raw_slice_t &slice)
+{
+    std::string ret = "";
     for (size_t i = 0; i < slice.len; ++i)
     {
         auto ptr = slice.buffer[i];
-        // 根据 slice 的 kind 决定将 ptr 视作何种元素
         switch (slice.kind)
         {
         case KOOPA_RSIK_FUNCTION:
-            // 访问函数
-            Visit(reinterpret_cast<koopa_raw_function_t>(ptr));
+            ret += raw_visit(reinterpret_cast<const koopa_raw_function_t>(ptr));
             break;
         case KOOPA_RSIK_BASIC_BLOCK:
             // 访问基本块
-            Visit(reinterpret_cast<koopa_raw_basic_block_t>(ptr));
+            ret += raw_visit(reinterpret_cast<koopa_raw_basic_block_t>(ptr));
             break;
         case KOOPA_RSIK_VALUE:
             // 访问指令
-            Visit(reinterpret_cast<koopa_raw_value_t>(ptr));
+            ret += raw_visit(reinterpret_cast<koopa_raw_value_t>(ptr));
             break;
         default:
             // 我们暂时不会遇到其他内容, 于是不对其做任何处理
             assert(false);
         }
     }
+    return ret;
 }
 
-// 访问函数
-void Visit(const koopa_raw_function_t &func)
+std::string RISCV_Builder::raw_visit(const koopa_raw_function_t &func)
 {
-    // 执行一些其他的必要操作
-    // ...
-    // 访问所有基本块
-
-    std::cout << "  .text" << std::endl;
-    std::cout << "  .globl " << func->name + 1 << std::endl;
-    std::cout << func->name + 1 << ":" << std::endl;
-    Visit(func->bbs);
+    // TODO: params
+    // TODO: used_by
+    char *name = new char[strlen(func->name) - 1];
+    memcpy(name, func->name + 1, strlen(func->name) - 1);
+    std::string ret = std::string(name) + ":\n";
+    ret += raw_visit(func->bbs);
+    return ret;
 }
 
-// 访问基本块
-void Visit(const koopa_raw_basic_block_t &bb)
+std::string RISCV_Builder::raw_visit(const koopa_raw_basic_block_t &bb)
 {
-    // 执行一些其他的必要操作
-    // ...
-    // 访问所有指令
-    Visit(bb->insts);
+    // TODO: used_by
+    // TODO: params
+    std::string ret = "";
+    ret += raw_visit(bb->insts);
+    return ret;
 }
 
-// 访问指令
-void Visit(const koopa_raw_value_t &value)
+std::string RISCV_Builder::raw_visit(const koopa_raw_value_t &value)
 {
-    // 根据指令类型判断后续需要如何访问
+    std::string ret = "";
     const auto &kind = value->kind;
     switch (kind.tag)
     {
     case KOOPA_RVT_RETURN:
-        // 访问 return 指令
-        Visit(kind.data.ret);
+        ret += raw_visit(kind.data.ret);
         break;
     case KOOPA_RVT_INTEGER:
-        // 访问 integer 指令
-        Visit(kind.data.integer);
+        // ret += raw_visit(kind.data.integer);
+        break;
+    case KOOPA_RVT_BINARY:
+        ret += raw_visit(kind.data.binary);
         break;
     default:
-        // 其他类型暂时遇不到
         assert(false);
     }
+    return ret;
 }
 
-// 访问对应类型指令的函数定义略
-// 视需求自行实现
-// ...
-
-// 访问 return 指令
-void Visit(const koopa_raw_return_t &value)
+std::string RISCV_Builder::raw_visit(const koopa_raw_return_t &ret_value)
 {
-    // 访问返回值
-    Visit(value.value);
-    std::cout << "  ret" << std::endl;
+    std::string ret = "";
+    ret += load_register(ret_value.value, "a0");
+    ret += "  ret\n";
+    return ret;
 }
-// 访问 integer 指令
-void Visit(const koopa_raw_integer_t &value)
+
+std::string RISCV_Builder::raw_visit(const koopa_raw_binary_t &b_value)
 {
-    // integer 指令的值
-    std::cout << "  li a0, " << value.value << std::endl;
+    std::string ret = "";
+    auto b_data = (koopa_raw_value_data_t *)b_value.lhs->used_by.buffer[0];
+    std::string rd = env.register_alloc(b_data);
+    std::string rs1;
+    if (b_value.lhs->kind.tag == KOOPA_RVT_INTEGER &&
+        b_value.lhs->kind.data.integer.value == 0)
+    {
+        rs1 = "x0";
+    }
+    else
+    {
+        rs1 = rd;
+    }
+    std::string rs2;
+    if (b_value.rhs->kind.tag == KOOPA_RVT_INTEGER &&
+        b_value.rhs->kind.data.integer.value == 0)
+    {
+        rs2 = "x0";
+    }
+    else
+    {
+        rs2 = env.register_alloc(b_value.rhs);
+        if (rs1 != "Null")
+        {
+            ret += load_register(b_value.lhs, rs1);
+        }
+        if (rs2 != "Null")
+        {
+            ret += load_register(b_value.rhs, rs2);
+        }
+        // env.state_free(rs1);
+        env.state_free(rs2);
+    }
+    switch (b_value.op)
+    {
+    case KOOPA_RBO_ADD:
+        ret += "  add " + rd + ", " + rs1 + ", " + rs2 + "\n";
+        break;
+    case KOOPA_RBO_SUB:
+        ret += "  sub " + rd + ", " + rs1 + ", " + rs2 + "\n";
+        break;
+    case KOOPA_RBO_MUL:
+        ret += "  mul " + rd + ", " + rs1 + ", " + rs2 + "\n";
+        break;
+    case KOOPA_RBO_DIV:
+        ret += "  div " + rd + ", " + rs1 + ", " + rs2 + "\n";
+        break;
+    case KOOPA_RBO_MOD:
+        ret += "  rem " + rd + ", " + rs1 + ", " + rs2 + "\n";
+        break;
+    case KOOPA_RBO_AND:
+        ret += "  and " + rd + ", " + rs1 + ", " + rs2 + "\n";
+        break;
+    case KOOPA_RBO_OR:
+        ret += "  or " + rd + ", " + rs1 + ", " + rs2 + "\n";
+        break;
+    case KOOPA_RBO_EQ:
+        ret += "  xor " + rd + ", " + rs1 + ", " + rs2 + "\n";
+        ret += "  seqz " + rd + ", " + rd + "\n";
+        break;
+    case KOOPA_RBO_NOT_EQ:
+        ret += "  xor " + rd + ", " + rs1 + ", " + rs2 + "\n";
+        ret += "  snez " + rd + ", " + rd + "\n";
+        break;
+    case KOOPA_RBO_GT:
+        ret += "  sgt " + rd + ", " + rs1 + ", " + rs2 + "\n";
+        break;
+    case KOOPA_RBO_LT:
+        ret += "  slt " + rd + ", " + rs1 + ", " + rs2 + "\n";
+        break;
+    case KOOPA_RBO_GE:
+        ret += "  slt " + rd + ", " + rs1 + ", " + rs2 + "\n";
+        ret += "  seqz " + rd + ", " + rd + "\n";
+        break;
+    case KOOPA_RBO_LE:
+        ret += "  sgt " + rd + ", " + rs1 + ", " + rs2 + "\n";
+        ret += "  seqz " + rd + ", " + rd + "\n";
+        break;
+    default:
+        break;
+    }
+    return ret;
+}
+
+void RISCV_Builder::build(koopa_raw_program_t raw, const char *path)
+{
+    env.state_init();
+    std::string ret = raw_visit(raw);
+    std::ofstream out(path);
+    out << ret;
+    out.close();
 }
