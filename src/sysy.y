@@ -1,7 +1,7 @@
 %code requires {
   #include <memory>
   #include <string>
-  #include "ast.h"
+  #include "ast.hpp"
 }
 
 %{
@@ -9,7 +9,7 @@
 #include <iostream>
 #include <memory>
 #include <string>
-#include "ast.h"
+#include "ast.hpp"
 
 // 声明 lexer 函数和错误处理函数
 int yylex();
@@ -20,8 +20,6 @@ using namespace std;
 %}
 
 // 定义 parser 函数和错误处理函数的附加参数
-// 我们需要返回一个字符串作为 AST, 所以我们把附加参数定义成字符串的智能指针
-// 解析完成后, 我们要手动修改这个参数, 把它设置成解析得到的字符串
 %parse-param { std::unique_ptr<BaseAST> &ast }
 
 // yylval 的定义, 我们把它定义成了一个联合体 (union)
@@ -43,7 +41,8 @@ using namespace std;
 %token <int_val> INT_CONST
 
 // 非终结符的类型定义
-%type <ast_val> FuncDef FuncType Block Stmt
+%type <ast_val> FuncDef FuncType Block Stmt Exp PrimaryExp UnaryExp MulExp AddExp
+%type <str_val> UnaryOp MulOp AddOp
 %type <int_val> Number
 
 %%
@@ -85,7 +84,6 @@ FuncDef
 FuncType
   : INT {
     auto ast = new FuncTypeAST();
-    ast->intstr = *(new string("int"));
     $$ = ast;
   }
   ;
@@ -99,12 +97,34 @@ Block
   ;
 
 Stmt
-  : RETURN Number ';' {
+  : RETURN Exp ';' {
     auto ast = new StmtAST();
-    ast->numberstr = *unique_ptr<string>(new string(to_string($2)));//can also use make_unique
+    ast->exp = unique_ptr<BaseAST>($2);//can also use make_unique
     $$ = ast;
   }
   ;
+
+Exp
+  : AddExp {
+    auto ast = new ExpAST();
+    ast->addexp = unique_ptr<BaseAST>($1);
+    $$ = ast;
+  }
+  ;
+
+PrimaryExp
+  : '(' Exp ')' {
+    auto ast = new PrimaryExpAST();
+    ast->type = 1;
+    ast->exp = unique_ptr<BaseAST>($2);
+    $$ = ast;
+  }
+  | Number {
+    auto ast = new PrimaryExpAST();
+    ast->type = 2;
+    ast->number = $1;
+    $$ = ast;
+  }
 
 Number
   : INT_CONST {
@@ -112,6 +132,86 @@ Number
   }
   ;
 
+UnaryExp
+  : PrimaryExp {
+    auto ast = new UnaryExpAST();
+    ast->type = 1;
+    ast->primaryexp = unique_ptr<BaseAST>($1);
+    $$ = ast;
+  }
+  | UnaryOp UnaryExp {
+    auto ast = new UnaryExpAST();
+    ast->type = 2;
+    ast->unaryop = $1;
+    ast->unaryexp = unique_ptr<BaseAST>($2);
+    $$ = ast;
+  }
+  ;
+
+UnaryOp
+  : '+' {
+    $$ = new string("+");
+  }
+  | '-' {
+    $$ = new string("-");
+  }
+  | '!' {
+    $$ = new string("!");
+  }
+  ;
+
+MulExp
+  : UnaryExp {
+    auto ast = new MulExpAST();
+    ast->unaryexp = unique_ptr<BaseAST>($1);
+    ast->type = 1;
+    $$ = ast;
+  }
+  | MulExp MulOp UnaryExp {
+    auto ast = new MulExpAST();
+    ast->type = 2;
+    ast->mulop = $2;
+    ast->mulexp = unique_ptr<BaseAST>($1);
+    ast->unaryexp = unique_ptr<BaseAST>($3);
+    $$ = ast;
+  }
+
+MulOp
+  : '*' {
+    $$ = new string("*");
+  }
+  | '/' {
+    $$ = new string("/");
+  }
+  | '%' {
+    $$ = new string("%");
+  }
+  ;
+
+AddExp
+  : MulExp {
+    auto ast = new AddExpAST();
+    ast->type = 1;
+    ast->mulexp = unique_ptr<BaseAST>($1);
+    $$ = ast;
+  }
+  | AddExp AddOp MulExp {
+    auto ast = new AddExpAST();
+    ast->type = 2;
+    ast->addop = $2;
+    ast->addexp = unique_ptr<BaseAST>($1);
+    ast->mulexp = unique_ptr<BaseAST>($3);
+    $$ = ast;
+  }
+
+AddOp
+  : '+' {
+    $$ = new string("+");
+  }
+  | '-' {
+    $$ = new string("-");
+  }
+  ;
 %%
 
 // 定义错误处理函数, 其中第二个参数是错误信息

@@ -7,7 +7,7 @@
 #include <string>
 #include "visit.hpp"
 #include "koopa.h"
-#include "ast.h"
+#include "ast.hpp"
 
 using namespace std;
 
@@ -41,16 +41,24 @@ int main(int argc, const char *argv[])
   // 调用GenerateIR函数, 把结果输出到ss
   stringstream ss;
   streambuf *oldcoutbuf = cout.rdbuf(ss.rdbuf());
-  ast->GenerateIR();
 
-  if (string(mode) == "-koopa")
+  if (string(mode) == "-dump")
   {
     // 输出重定向到文件
+    // ast->Dump();
+    cout.rdbuf(fout.rdbuf());
+    cout << ss.str();
+  }
+  else if (string(mode) == "-koopa")
+  {
+    // 输出重定向到文件
+    ast->GenerateIR();
     cout.rdbuf(fout.rdbuf());
     cout << ss.str();
   }
   else if (string(mode) == "-riscv")
   {
+    ast->GenerateIR();
     string tempstr = ss.str();
     const char *str = tempstr.c_str();
     // 解析字符串 str, 得到 Koopa IR 程序
