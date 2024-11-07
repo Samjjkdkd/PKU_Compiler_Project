@@ -1,14 +1,34 @@
 #pragma once
+#include <vector>
+#include <string>
 #include <iostream>
 #include <memory>
-#include "utils.h"
-// CompUnit    ::= FuncDef;
+#include <assert.h>
+#include <fstream>
+#include <cstring>
+#include "koopa.h"
+// CompUnit      ::= FuncDef;
+
+// Decl          ::= ConstDecl | VarDecl;
+// ConstDecl     ::= "const" BType ConstDef {"," ConstDef} ";";
+// BType         ::= "int";
+// ConstDef      ::= IDENT "=" ConstInitVal;
+// ConstInitVal  ::= ConstExp;
+
+// VarDecl       ::= BType VarDef {"," VarDef} ";";
+// VarDef        ::= IDENT | IDENT "=" InitVal;
+// InitVal       ::= Exp;
+
 // FuncDef     ::= FuncType IDENT "(" ")" Block;
 // FuncType    ::= "int";
-// Block       ::= "{" Stmt "}";
-// Stmt        ::= "return" Exp ";";
+
+// Block       ::= "{" {BlockItem} "}";
+// BlockItem   ::= Decl | Stmt;
+// Stmt        ::= LVal "=" Exp ";"| "return" Exp ";";
+
 // Exp         ::= LOrExp;
-// PrimaryExp  ::= "(" Exp ")" | Number;
+// LVal        ::= IDENT;
+// PrimaryExp  ::= "(" Exp ")"  | LVal | Number;
 // Number      ::= INT_CONST;
 // UnaryExp    ::= PrimaryExp | UnaryOp UnaryExp;
 // UnaryOp     ::= "+" | "-" | "!";
@@ -22,12 +42,12 @@
 // EqOp        ::= "==" | "!=";
 // LAndExp     ::= EqExp | LAndExp "&&" EqExp;
 // LOrExp      ::= LAndExp | LOrExp "||" LAndExp;
+// ConstExp    ::= Exp;
 // 所有 AST 的基类
 class BaseAST
 {
 public:
     virtual ~BaseAST() = default;
-    // virtual void Dump() const = 0;
     virtual void *GenerateIR() const { return nullptr; };
     virtual void *GenerateIR(std::vector<const void *> &inst_buf) const { return nullptr; };
     virtual void *GenerateIR(koopa_raw_slice_t parent,
@@ -39,7 +59,7 @@ class CompUnitAST : public BaseAST
 {
 public:
     std::unique_ptr<BaseAST> func_def;
-    // void Dump() const override;
+
     void *GenerateIR() const override;
 };
 
@@ -50,7 +70,7 @@ public:
     std::unique_ptr<BaseAST> func_type;
     std::string ident;
     std::unique_ptr<BaseAST> block;
-    // void Dump() const override;
+
     void *GenerateIR() const override;
 };
 
@@ -59,7 +79,7 @@ class FuncTypeAST : public BaseAST
 {
 public:
     std::string func_type = "int";
-    // void Dump() const override;
+
     void *GenerateIR() const override;
 };
 
@@ -68,7 +88,7 @@ class BlockAST : public BaseAST
 {
 public:
     std::unique_ptr<BaseAST> stmt;
-    // void Dump() const override;
+
     void *GenerateIR() const override;
 };
 
@@ -77,7 +97,7 @@ class StmtAST : public BaseAST
 {
 public:
     std::unique_ptr<BaseAST> exp;
-    // void Dump() const override;
+
     void *GenerateIR(std::vector<const void *> &inst_buf) const override;
 };
 
@@ -86,7 +106,7 @@ class ExpAST : public BaseAST
 {
 public:
     std::unique_ptr<BaseAST> lor_exp;
-    // void Dump() const override;
+
     void *GenerateIR(koopa_raw_slice_t parent,
                      std::vector<const void *> &inst_buf) const override;
 };
@@ -98,7 +118,7 @@ public:
     std::int32_t type;
     std::unique_ptr<BaseAST> exp;
     std::int32_t number;
-    // void Dump() const override;
+
     void *GenerateIR(koopa_raw_slice_t parent,
                      std::vector<const void *> &inst_buf) const override;
 };
@@ -113,7 +133,7 @@ public:
     std::string unary_op;
     std::unique_ptr<BaseAST> primary_exp;
     std::unique_ptr<BaseAST> unary_exp;
-    // void Dump() const override;
+
     void *GenerateIR(koopa_raw_slice_t parent,
                      std::vector<const void *> &inst_buf) const override;
 };
@@ -126,7 +146,7 @@ public:
     std::string mul_op;
     std::unique_ptr<BaseAST> mul_exp;
     std::unique_ptr<BaseAST> unary_exp;
-    // void Dump() const override;
+
     void *GenerateIR(koopa_raw_slice_t parent,
                      std::vector<const void *> &inst_buf) const override;
 };
@@ -139,7 +159,7 @@ public:
     std::string add_op;
     std::unique_ptr<BaseAST> add_exp;
     std::unique_ptr<BaseAST> mul_exp;
-    // void Dump() const override;
+
     void *GenerateIR(koopa_raw_slice_t parent,
                      std::vector<const void *> &inst_buf) const override;
 };
@@ -152,7 +172,7 @@ public:
     std::string rel_op;
     std::unique_ptr<BaseAST> rel_exp;
     std::unique_ptr<BaseAST> add_exp;
-    // void Dump() const override;
+
     void *GenerateIR(koopa_raw_slice_t parent,
                      std::vector<const void *> &inst_buf) const override;
 };
@@ -165,7 +185,7 @@ public:
     std::string eq_op;
     std::unique_ptr<BaseAST> eq_exp;
     std::unique_ptr<BaseAST> rel_exp;
-    // void Dump() const override;
+
     void *GenerateIR(koopa_raw_slice_t parent,
                      std::vector<const void *> &inst_buf) const override;
 };
@@ -177,9 +197,7 @@ public:
     std::int32_t type;
     std::unique_ptr<BaseAST> land_exp;
     std::unique_ptr<BaseAST> eq_exp;
-    // void Dump() const override;
-    void *make_bool(koopa_raw_slice_t parent, std::vector<const void *> &inst_buf,
-                    koopa_raw_value_t exp) const;
+
     void *GenerateIR(koopa_raw_slice_t parent,
                      std::vector<const void *> &inst_buf) const override;
 };
@@ -190,9 +208,18 @@ public:
     std::int32_t type;
     std::unique_ptr<BaseAST> lor_exp;
     std::unique_ptr<BaseAST> land_exp;
-    // void Dump() const override;
-    void *make_bool(koopa_raw_slice_t parent, std::vector<const void *> &inst_buf,
-                    koopa_raw_value_t exp) const;
+
     void *GenerateIR(koopa_raw_slice_t parent,
                      std::vector<const void *> &inst_buf) const override;
 };
+
+void *make_bool(koopa_raw_slice_t parent, std::vector<const void *> &inst_buf,
+                koopa_raw_value_t exp);
+
+koopa_raw_slice_t generate_slice(koopa_raw_slice_item_kind_t kind = KOOPA_RSIK_UNKNOWN);
+koopa_raw_slice_t generate_slice(std::vector<const void *> &vec,
+                                 koopa_raw_slice_item_kind_t kind = KOOPA_RSIK_UNKNOWN);
+koopa_raw_slice_t generate_slice(const void *data,
+                                 koopa_raw_slice_item_kind_t kind = KOOPA_RSIK_UNKNOWN);
+koopa_raw_type_t generate_type(koopa_raw_type_tag_t tag);
+koopa_raw_value_data *generate_number(koopa_raw_slice_t parent, int32_t number);

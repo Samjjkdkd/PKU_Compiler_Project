@@ -38,7 +38,7 @@ int main(int argc, const char *argv[])
   unique_ptr<BaseAST> ast;
   auto ret = yyparse(ast);
   assert(!ret);
-  // 调用GenerateIR函数, 把结果输出到ss
+  // 生成 IR
   koopa_raw_program_t raw = *(koopa_raw_program_t *)ast->GenerateIR();
   koopa_program_t program;
   koopa_error_code_t error = koopa_generate_raw_to_koopa(&raw, &program);
@@ -69,8 +69,11 @@ int main(int argc, const char *argv[])
     koopa_raw_program_builder_t builder = koopa_new_raw_program_builder();
     koopa_raw_program_t raw = koopa_build_raw_program(builder, program);
     koopa_delete_program(program);
-    RISCV_Builder builder_;
-    builder_.build(raw, output);
+    streambuf *oldcoutbuf = cout.rdbuf(fout.rdbuf());
+    Visit(raw);
+    cout.rdbuf(oldcoutbuf);
+    fout.close();
+    koopa_delete_raw_program_builder(builder);
   }
 
   return 0;

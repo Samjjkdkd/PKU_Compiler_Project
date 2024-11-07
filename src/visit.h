@@ -1,43 +1,29 @@
 #pragma once
-#include <fstream>
-#include <map>
-#include <memory>
-#include <string>
-#include <vector>
-
 #include "koopa.h"
 
-class RISCV_Builder
-{
-    class Env
-    {
-        enum Register_State
-        {
-            UNUSED,
-            USED
-        };
-        std::map<koopa_raw_value_t, std::string>
-            register_alloc_map;
-        std::map<std::string, Register_State> register_state_map;
+// 加载寄存器
+void load_reg(const koopa_raw_value_t &value, std::string reg);
 
-    public:
-        void state_init();
-        void state_free(std::string reg);
-        std::string register_check(koopa_raw_value_t value);
-        std::string register_alloc(koopa_raw_value_t value);
-    };
-    Env env;
-    std::string load_register(koopa_raw_value_t value, std::string reg);
-    std::string raw_visit(const koopa_raw_program_t &raw);
-    std::string raw_visit(const koopa_raw_slice_t &slice);
-    std::string raw_visit(const koopa_raw_function_t &func);
-    std::string raw_visit(const koopa_raw_basic_block_t &bb);
-    std::string raw_visit(const koopa_raw_value_t &value);
-    std::string raw_visit(const koopa_raw_return_t &return_value);
-    // std::string raw_visit(const koopa_raw_integer_t &integer_value);
-    std::string raw_visit(const koopa_raw_binary_t &binary_value);
+// 访问 raw program
+void Visit(const koopa_raw_program_t &program);
 
-public:
-    RISCV_Builder() = default;
-    void build(koopa_raw_program_t raw, const char *path);
-};
+// 访问 raw slice
+void Visit(const koopa_raw_slice_t &slice);
+
+// 访问函数
+void Visit(const koopa_raw_function_t &func);
+
+// 访问基本块
+void Visit(const koopa_raw_basic_block_t &bb);
+
+// 访问指令
+void Visit(const koopa_raw_value_t &value);
+
+// 访问 return 指令
+void Visit(const koopa_raw_return_t &value);
+
+// 访问 integer 指令
+void Visit(const koopa_raw_integer_t &value);
+
+// 访问 binary 指令
+void Visit(const koopa_raw_binary_t &value);
