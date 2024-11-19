@@ -38,6 +38,15 @@ int main(int argc, const char *argv[])
   unique_ptr<BaseAST> ast;
   auto ret = yyparse(ast);
   assert(!ret);
+  // 打印 AST
+  if (string(mode) == "-dump")
+  {
+    streambuf *oldcoutbuf = cout.rdbuf(fout.rdbuf());
+    ast->Dump();
+    cout.rdbuf(oldcoutbuf);
+    fout.close();
+    return 0;
+  }
   // 生成 IR
   koopa_raw_program_t raw = *(koopa_raw_program_t *)ast->GenerateIR();
   koopa_program_t program;
