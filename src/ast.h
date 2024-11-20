@@ -6,7 +6,7 @@
 #include <assert.h>
 #include <fstream>
 #include <cstring>
-#include <map>
+#include <unordered_map>
 #include "koopa.h"
 // CompUnit      ::= FuncDef;
 
@@ -81,7 +81,7 @@ public:
     void init();
 
 private:
-    std::map<std::string, SymbolTable::Value> symbol_table;
+    std::unordered_map<std::string, SymbolTable::Value> symbol_table;
 };
 static SymbolTable symbol_table;
 

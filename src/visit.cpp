@@ -1,29 +1,35 @@
-#include <cassert>
-#include <iostream>
 #include "visit.h"
-#include "koopa.h"
 
-static int reg_count = 0;
-// 加载寄存器
-void load_reg(const koopa_raw_value_t &value, std::string reg)
+/**********************************************************************************************************/
+/************************************************Stack*****************************************************/
+/**********************************************************************************************************/
+
+void Stack::alloc_value(koopa_raw_value_t value, int loc)
 {
-    // 根据指令类型判断后续需要如何访问
-    const auto &kind = value->kind;
-    switch (kind.tag)
-    {
-    case KOOPA_RVT_INTEGER:
-        // 访问 integer 指令
-        reg_count++;
-        std::cout << "  li " << reg << ", " << kind.data.integer.value << std::endl;
-        break;
-    default:
-        break;
-    }
+    value_loc[value] = loc;
 }
+
+int Stack::get_loc(koopa_raw_value_t value)
+{
+    return value_loc[value];
+}
+
+void Stack::init()
+{
+    len = 0;
+    pos = 0;
+    value_loc.clear();
+}
+
+/**********************************************************************************************************/
+/************************************************Visit*****************************************************/
+/**********************************************************************************************************/
+
 // 访问 raw program
 void Visit(const koopa_raw_program_t &program)
 {
     // 执行一些其他的必要操作
+
     // ...
     // 访问所有全局变量
     Visit(program.values);
@@ -67,6 +73,37 @@ void Visit(const koopa_raw_function_t &func)
     std::cout << "  .globl " << func->name + 1 << std::endl;
     std::cout << func->name + 1 << ":" << std::endl;
 
+    // 初始化栈帧
+    stack.init();
+
+    // 计算栈帧大小
+    for (size_t i = 0; i < func->bbs.len; ++i)
+    {
+        auto bbs = reinterpret_cast<koopa_raw_basic_block_t>(func->bbs.buffer[i])->insts;
+        for (size_t j = 0; j < bbs.len; ++j)
+        {
+            auto inst = reinterpret_cast<koopa_raw_value_t>(bbs.buffer[j]);
+            // 把所有变量都放在栈上
+            if (inst->ty->tag != KOOPA_RTT_UNIT)
+            {
+                stack.len += 4;
+            }
+        }
+    }
+
+    // 将栈帧长度对齐到16字节
+    stack.len = (stack.len + 15) / 16 * 16;
+
+    // 分配栈帧
+    // addi 指令中立即数的范围是 -2048 到 2047
+    if (stack.len != 0)
+    {
+        if (stack.len < 2048)
+            std::cout << "  addi sp, sp, -" << stack.len << std::endl;
+        else
+            std::cout << "  li t0, " << stack.len << std::endl
+                      << "  sub sp, sp, t0" << std::endl;
+    }
     // 访问所有基本块
     Visit(func->bbs);
 }
@@ -97,7 +134,20 @@ void Visit(const koopa_raw_value_t &value)
         break;
     case KOOPA_RVT_BINARY:
         // 访问 binary 指令
-        Visit(kind.data.binary);
+        Visit(kind.data.binary, value);
+        break;
+    case KOOPA_RVT_ALLOC:
+        // 分配栈帧
+        stack.alloc_value(value, stack.pos);
+        stack.pos += 4;
+        break;
+    case KOOPA_RVT_LOAD:
+        // 访问 load 指令
+        Visit(kind.data.load, value);
+        break;
+    case KOOPA_RVT_STORE:
+        // 访问 store 指令
+        Visit(kind.data.store);
         break;
     default:
         // 其他类型暂时遇不到
@@ -109,72 +159,133 @@ void Visit(const koopa_raw_value_t &value)
 void Visit(const koopa_raw_return_t &value)
 {
     // 访问返回值
-    Visit(value.value);
+    load_reg(value.value, "a0");
+    // 恢复栈帧
+    if (stack.len != 0)
+    {
+        if (stack.len < 2048)
+            std::cout << "  addi sp, sp, " << stack.len << std::endl;
+        else
+            std::cout << "  li t0, " << stack.len << std::endl
+                      << "  add sp, sp, t0" << std::endl;
+    }
     std::cout << "  ret" << std::endl;
 }
 
 // 访问 integer 指令
 void Visit(const koopa_raw_integer_t &value)
 {
-    // 访问返回值
-    // std::cout << "visit integer" << std::endl;
-    std::cout << "  li a0, " << value.value << std::endl;
+    std::cout << "  li t0, " << value.value << std::endl;
 }
 
 // 访问 binary 指令
-void Visit(const koopa_raw_binary_t &value)
+void Visit(const koopa_raw_binary_t &binary, const koopa_raw_value_t &value)
 {
     // 访问左右操作数
-    std::cout << "访问左式" << value.lhs->kind.tag << std::endl;
-    load_reg(value.lhs, std::string("a") + std::to_string(reg_count));
-    std::cout << "访问右式" << value.rhs->kind.tag << std::endl;
-    load_reg(value.rhs, std::string("a") + std::to_string(reg_count));
+    load_reg(binary.lhs, "t0");
+    load_reg(binary.rhs, "t1");
+
     // 进行运算
-    switch (value.op)
+    switch (binary.op)
     {
     case KOOPA_RBO_ADD:
-        std::cout << "  add a" << reg_count - 2 << " a" << reg_count - 2 << " a" << reg_count - 1 << std::endl;
+        std::cout << "  add t0, t0, t1" << std::endl;
         break;
     case KOOPA_RBO_SUB:
-        std::cout << "  sub a" << reg_count - 2 << " a" << reg_count - 2 << " a" << reg_count - 1 << std::endl;
+        std::cout << "  sub t0, t0, t1" << std::endl;
         break;
     case KOOPA_RBO_MUL:
-        std::cout << "  mul a" << reg_count - 2 << " a" << reg_count - 2 << " a" << reg_count - 1 << std::endl;
+        std::cout << "  mul t0, t0, t1" << std::endl;
         break;
-    // case KOOPA_RBO_DIV:
-    //     ret += "  div " + rd + ", " + rs1 + ", " + rs2 + "\n";
-    //     break;
-    // case KOOPA_RBO_MOD:
-    //     ret += "  rem " + rd + ", " + rs1 + ", " + rs2 + "\n";
-    //     break;
-    // case KOOPA_RBO_AND:
-    //     ret += "  and " + rd + ", " + rs1 + ", " + rs2 + "\n";
-    //     break;
-    // case KOOPA_RBO_OR:
-    //     ret += "  or " + rd + ", " + rs1 + ", " + rs2 + "\n";
-    //     break;
-    // case KOOPA_RBO_EQ:
-    //     ret += "  xor " + rd + ", " + rs1 + ", " + rs2 + "\n";
-    //     ret += "  seqz " + rd + ", " + rd + "\n";
-    //     break;
-    // case KOOPA_RBO_NOT_EQ:
-    //     ret += "  xor " + rd + ", " + rs1 + ", " + rs2 + "\n";
-    //     ret += "  snez " + rd + ", " + rd + "\n";
-    //     break;
-    // case KOOPA_RBO_GT:
-    //     ret += "  sgt " + rd + ", " + rs1 + ", " + rs2 + "\n";
-    //     break;
-    // case KOOPA_RBO_LT:
-    //     ret += "  slt " + rd + ", " + rs1 + ", " + rs2 + "\n";
-    //     break;
-    // case KOOPA_RBO_GE:
-    //     ret += "  slt " + rd + ", " + rs1 + ", " + rs2 + "\n";
-    //     ret += "  seqz " + rd + ", " + rd + "\n";
-    //     break;
-    // case KOOPA_RBO_LE:
-    //     ret += "  sgt " + rd + ", " + rs1 + ", " + rs2 + "\n";
-    //     ret += "  seqz " + rd + ", " + rd + "\n";
-    //     break;
+    case KOOPA_RBO_DIV:
+        std::cout << "  div t0, t0, t1" << std::endl;
+        break;
+    case KOOPA_RBO_MOD:
+        std::cout << "  rem t0, t0, t1" << std::endl;
+        break;
+    case KOOPA_RBO_AND:
+        std::cout << "  and t0, t0, t1" << std::endl;
+        break;
+    case KOOPA_RBO_OR:
+        std::cout << "  or t0, t0, t1" << std::endl;
+        break;
+    case KOOPA_RBO_XOR:
+        std::cout << "  xor t0, t0, t1" << std::endl;
+        break;
+    case KOOPA_RBO_SHL:
+        std::cout << "  sll t0, t0, t1" << std::endl;
+        break;
+    case KOOPA_RBO_SHR:
+        std::cout << "  srl t0, t0, t1" << std::endl;
+        break;
+    case KOOPA_RBO_SAR:
+        std::cout << "  sra t0, t0, t1" << std::endl;
+        break;
+    case KOOPA_RBO_EQ:
+        std::cout << " xor t0, t0, t1" << std::endl;
+        std::cout << "  seqz t0, t0" << std::endl;
+        break;
+    case KOOPA_RBO_NOT_EQ:
+        std::cout << " xor t0, t0, t1" << std::endl;
+        std::cout << "  snez t0, t0" << std::endl;
+        break;
+    case KOOPA_RBO_GT:
+        std::cout << "  slt t0, t1, t0" << std::endl;
+        break;
+    case KOOPA_RBO_LT:
+        std::cout << "  slt t0, t0, t1" << std::endl;
+        break;
+    case KOOPA_RBO_GE:
+        std::cout << "  slt t0, t0, t1" << std::endl;
+        std::cout << "  xori t0, t0, 1" << std::endl;
+        break;
+    case KOOPA_RBO_LE:
+        std::cout << "  slt t0, t1, t0" << std::endl;
+        std::cout << "  xori t0, t0, 1" << std::endl;
+        break;
+    }
+
+    // 将结果存回
+    stack.alloc_value(value, stack.pos);
+    stack.pos += 4;
+    std::cout << "  sw t0, " << stack.get_loc(value) << "(sp)" << std::endl;
+}
+
+// 访问 load 指令
+void Visit(const koopa_raw_load_t &load, const koopa_raw_value_t &value)
+{
+    load_reg(load.src, "t0");
+
+    // 将结果存回
+    stack.alloc_value(value, stack.pos);
+    stack.pos += 4;
+    std::cout << "  sw t0, " << stack.get_loc(value) << "(sp)" << std::endl;
+}
+
+// 访问 store 指令
+void Visit(const koopa_raw_store_t &value)
+{
+    load_reg(value.value, "t0");
+
+    // 将结果存回
+    std::cout << "  sw t0, " << stack.get_loc(value.dest) << "(sp)" << std::endl;
+}
+/**********************************************************************************************************/
+/************************************************Utils*****************************************************/
+/**********************************************************************************************************/
+
+void load_reg(const koopa_raw_value_t &value, std::string reg)
+{
+    switch (value->kind.tag)
+    {
+    case KOOPA_RVT_INTEGER:
+        std::cout << "  li " << reg << ", " << value->kind.data.integer.value << std::endl;
+        break;
+    case KOOPA_RVT_ALLOC:
+    case KOOPA_RVT_LOAD:
+    case KOOPA_RVT_BINARY:
+        std::cout << "  lw " << reg << ", " << stack.get_loc(value) << "(sp)" << std::endl;
+        break;
     default:
         break;
     }

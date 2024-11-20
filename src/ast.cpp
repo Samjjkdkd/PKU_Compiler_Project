@@ -335,8 +335,7 @@ void *FuncTypeAST::GenerateIR() const
 
 void *BlockAST::GenerateIR() const
 {
-    std::unique_ptr<SymbolTable> symbol_table = std::make_unique<SymbolTable>();
-    symbol_table->init();
+    symbol_table.init();
     koopa_raw_basic_block_data_t *ret = new koopa_raw_basic_block_data_t();
     ret->name = "%entry";
     ret->params = generate_slice(KOOPA_RSIK_VALUE);
