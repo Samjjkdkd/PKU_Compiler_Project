@@ -347,28 +347,28 @@ void *BlockAST::GenerateIR() const
          block_item != (*block_item_list).end(); block_item++)
     {
         (*block_item)->GenerateIR(blockitems);
-        // if (blockitems.size() > 0)
-        // {
-        //     auto inst = (koopa_raw_value_t)blockitems.back();
-        //     if (inst->kind.tag == KOOPA_RVT_RETURN)
-        //     {
-        //         break;
-        //     }
-        // }
+        if (blockitems.size() > 0)
+        {
+            auto last = (koopa_raw_value_t)blockitems.back();
+            if (last->kind.tag == KOOPA_RVT_RETURN)
+            {
+                ret->insts = generate_slice(blockitems, KOOPA_RSIK_VALUE);
+                return ret;
+            }
+        }
     }
-    // auto last_inst = (koopa_raw_value_t)blockitems.back();
-    // if (last_inst->kind.tag != KOOPA_RVT_RETURN)
-    // {
-    //     koopa_raw_value_data_t *ret = new koopa_raw_value_data();
-    //     ret->ty = generate_type(KOOPA_RTT_UNIT);
-    //     ret->name = nullptr;
-    //     ret->used_by = generate_slice(KOOPA_RSIK_VALUE);
-    //     ret->kind.tag = KOOPA_RVT_RETURN;
-    //     ret->kind.data.ret.value = generate_number(generate_slice(KOOPA_RSIK_UNKNOWN), 0);
-    //     blockitems.push_back(ret);
-    // }
+    auto last = (koopa_raw_value_t)blockitems.back();
+    if (last->kind.tag != KOOPA_RVT_RETURN)
+    {
+        koopa_raw_value_data_t *ret = new koopa_raw_value_data();
+        ret->ty = generate_type(KOOPA_RTT_UNIT);
+        ret->name = nullptr;
+        ret->used_by = generate_slice(KOOPA_RSIK_VALUE);
+        ret->kind.tag = KOOPA_RVT_RETURN;
+        ret->kind.data.ret.value = generate_number(generate_slice(KOOPA_RSIK_VALUE), 0);
+        blockitems.push_back(ret);
+    }
     ret->insts = generate_slice(blockitems, KOOPA_RSIK_VALUE);
-
     return ret;
 }
 
