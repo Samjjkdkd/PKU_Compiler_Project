@@ -8,14 +8,16 @@
 #include <cstring>
 #include <unordered_map>
 #include "koopa.h"
-// CompUnit      ::= FuncDef;
 
-// FuncDef     ::= FuncType IDENT "(" ")" Block;
+// #define DEBUG
+//  CompUnit      ::= FuncDef;
 
-// FuncType    ::= "int";
+// FuncDef       ::= FuncType IDENT "(" ")" Block;
 
-// Block       ::= "{" {BlockItem} "}";
-// BlockItem   ::= Decl | Stmt;
+// FuncType      ::= "int";
+
+// Block         ::= "{" {BlockItem} "}";
+// BlockItem     ::= Decl | Stmt;
 
 // Decl          ::= ConstDecl | VarDecl;
 
@@ -23,13 +25,16 @@
 // BType         ::= "int";
 // ConstDef      ::= IDENT "=" ConstInitVal;
 // ConstInitVal  ::= ConstExp;
-// ConstExp    ::= Exp;
+// ConstExp      ::= Exp;
 
 // VarDecl       ::= BType VarDef {"," VarDef} ";";
 // VarDef        ::= IDENT | IDENT "=" InitVal;
 // InitVal       ::= Exp;
 
-// Stmt        ::= LVal "=" Exp ";"| "return" Exp ";";
+// Stmt          :: = LVal "=" Exp ";"
+//                    | [Exp] ";"
+//                    | Block
+//                    | "return" [Exp] ";";
 
 // LVal        ::= IDENT;
 
@@ -72,16 +77,23 @@ public:
             koopa_raw_value_t var_value;
         } data;
         Value() = default;
-        Value(ValueType type, int value) : type(type) { data.const_value = value; };
-        Value(ValueType type, koopa_raw_value_t value) : type(type) { data.var_value = value; };
+        Value(ValueType type, int value) : type(type)
+        {
+            data.const_value = value;
+        };
+        Value(ValueType type, koopa_raw_value_t value) : type(type)
+        {
+            data.var_value = value;
+        };
     };
 
     void add_symbol(std::string name, SymbolTable::Value value);
     Value get_value(std::string name);
-    void init();
+    void add_table();
+    void del_table();
 
 private:
-    std::unordered_map<std::string, SymbolTable::Value> symbol_table;
+    std::vector<std::unordered_map<std::string, SymbolTable::Value>> symbol_table_stack;
 };
 static SymbolTable symbol_table;
 
@@ -142,6 +154,7 @@ public:
 
     void Dump() const override;
     void *GenerateIR() const override;
+    void *GenerateIR(std::vector<const void *> &inst_buf) const override;
 };
 
 // BlockItem   ::= Decl | Stmt;
@@ -257,13 +270,17 @@ public:
                      std::vector<const void *> &inst_buf) const override;
 };
 
-// Stmt        ::= LVal "=" Exp ";"| "return" Exp ";";
+// Stmt          :: = LVal "=" Exp ";"
+//                    | [Exp] ";"
+//                    | Block
+//                    | "return"[Exp] ";";
 class StmtAST : public BaseAST
 {
 public:
     std::int32_t type;
     std::unique_ptr<BaseAST> lval;
     std::unique_ptr<BaseAST> exp;
+    std::unique_ptr<BaseAST> block;
 
     void Dump() const override;
     void *GenerateIR(std::vector<const void *> &inst_buf) const override;

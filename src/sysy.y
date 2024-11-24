@@ -104,6 +104,11 @@ Block
     ast->block_item_list = unique_ptr<vector<unique_ptr<BaseAST> >>($2);
     $$ = ast;
   }
+  | '{' '}' {
+    auto ast = new BlockAST();
+    ast->block_item_list = nullptr;
+    $$ = ast;
+  }
   ;
 
 BlockItemList
@@ -257,10 +262,34 @@ Stmt
     ast->exp = unique_ptr<BaseAST>($3);
     $$ = ast;
   }
-  | RETURN Exp ';' {
+  | Exp ';' {
     auto ast = new StmtAST();
     ast->type = 2;
-    ast->exp = unique_ptr<BaseAST>($2);//can also use make_unique
+    ast->exp = unique_ptr<BaseAST>($1);
+    $$ = ast;
+  }
+  | ';' {
+    auto ast = new StmtAST();
+    ast->type = 2;
+    ast->exp = nullptr;
+    $$ = ast;
+  }
+  | Block {
+    auto ast = new StmtAST();
+    ast->type = 3;
+    ast->block = unique_ptr<BaseAST>($1);
+    $$ = ast;
+  }
+  | RETURN Exp ';' {
+    auto ast = new StmtAST();
+    ast->type = 4;
+    ast->exp = unique_ptr<BaseAST>($2);
+    $$ = ast;
+  }
+  | RETURN ';' {
+    auto ast = new StmtAST();
+    ast->exp = nullptr;
+    ast->type = 4;
     $$ = ast;
   }
   ;

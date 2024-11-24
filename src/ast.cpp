@@ -6,291 +6,68 @@
 
 void SymbolTable::add_symbol(std::string name, SymbolTable::Value value)
 {
-    symbol_table[name] = value;
+#ifdef DEBUG
+    std::cout << "SymbolTable::add_symbol" << std::endl;
+    std::cout << name << " ";
+    if (value.type == SymbolTable::Value::Var)
+        std::cout << "Var " << (void *)value.data.var_value << std::endl;
+    else
+        std::cout << "Const " << value.data.const_value << std::endl;
+#endif
+    symbol_table_stack.back()[name] = value;
 }
 
 SymbolTable::Value SymbolTable::get_value(std::string name)
 {
-    return symbol_table[name];
-}
-
-void SymbolTable::init()
-{
-    symbol_table.clear();
-}
-
-/*********************************************************************************************************/
-/************************************************Dump*****************************************************/
-/*********************************************************************************************************/
-
-void CompUnitAST::Dump() const
-{
-    std::cout << "CompUnit{";
-    func_def->Dump();
-    std::cout << "}";
-}
-
-void FuncDefAST::Dump() const
-{
-    std::cout << "FuncDef{";
-    func_type->Dump();
-    std::cout << ident << "()";
-    block->Dump();
-    std::cout << "}";
-}
-
-void FuncTypeAST::Dump() const
-{
-    std::cout << "FuncType{";
-    std::cout << func_type;
-    std::cout << "}";
-}
-
-void BlockAST::Dump() const
-{
-    std::cout << "Block{";
-    for (auto block_item = (*block_item_list).begin();
-         block_item != (*block_item_list).end(); block_item++)
+#ifdef DEBUG
+    std::cout << "SymbolTable::get_value" << std::endl;
+    std::cout << name << " ";
+#endif
+    for (auto it = symbol_table_stack.rbegin();
+         it != symbol_table_stack.rend(); it++)
     {
-        (*block_item)->Dump();
+        auto value = it->find(name);
+        if (value != it->end())
+        {
+#ifdef DEBUG
+            if (value->second.type == SymbolTable::Value::Var)
+                std::cout << "Var " << (void *)value->second.data.var_value << std::endl;
+            else
+                std::cout << "Const " << value->second.data.const_value << std::endl;
+#endif
+            return value->second;
+        }
     }
-    std::cout << "}";
+    std::cout << "Error: " << name << " not found" << std::endl;
+    assert(0);
 }
 
-void BlockItemAST::Dump() const
+void SymbolTable::add_table()
 {
-    std::cout << "BlockItem{";
-    if (type == 1)
-        decl->Dump();
-    else
-        stmt->Dump();
-    std::cout << "}" << std::endl;
+#ifdef DEBUG
+    std::cout << "SymbolTable::add_table" << std::endl;
+#endif
+    std::unordered_map<std::string, SymbolTable::Value> new_table;
+    symbol_table_stack.push_back(new_table);
 }
 
-void DeclAST::Dump() const
+void SymbolTable::del_table()
 {
-    std::cout << "Decl{";
-    if (type == 1)
-        const_decl->Dump();
-    else
-        var_decl->Dump();
-    std::cout << "}";
-}
-
-void ConstDeclAST::Dump() const
-{
-    std::cout << "ConstDecl{";
-    btype->Dump();
-    for (auto const_def = (*const_def_list).begin();
-         const_def != (*const_def_list).end(); const_def++)
+#ifdef DEBUG
+    std::cout << "SymbolTable::del_table" << std::endl;
+    std::unordered_map<std::string, SymbolTable::Value> mp;
+    mp = symbol_table_stack.back();
+    for (std::unordered_map<std::string, SymbolTable::Value>::iterator it = mp.begin();
+         it != mp.end(); it++)
     {
-        (*const_def)->Dump();
+        std::cout << it->first << " ";
+        if (it->second.type == SymbolTable::Value::Var)
+            std::cout << "Var " << (void *)it->second.data.var_value << std::endl;
+        else
+            std::cout << "Const " << it->second.data.const_value << std::endl;
     }
-    std::cout << "}";
-}
-
-void BTypeAST::Dump() const
-{
-    std::cout << "BType{";
-    std::cout << btype;
-    std::cout << "}";
-}
-
-void ConstDefAST::Dump() const
-{
-    std::cout << "ConstDef{";
-    std::cout << ident << "=";
-    const_init_val->Dump();
-    std::cout << "}";
-}
-
-void ConstInitValAST::Dump() const
-{
-    std::cout << "ConstInitVal{";
-    const_exp->Dump();
-    std::cout << "}";
-}
-
-void ConstExpAST::Dump() const
-{
-    std::cout << "ConstExp{";
-    exp->Dump();
-    std::cout << "}";
-}
-
-void VarDeclAST::Dump() const
-{
-    btype->Dump();
-    for (auto var_def = (*var_def_list).begin();
-         var_def != (*var_def_list).end(); var_def++)
-    {
-        std::cout << "VarDecl{";
-        (*var_def)->Dump();
-    }
-    std::cout << "}";
-}
-
-void VarDefAST::Dump() const
-{
-    std::cout << "VarDef{";
-    std::cout << ident;
-    if (type == 2)
-    {
-        std::cout << "=";
-        init_val->Dump();
-    }
-    std::cout << "}";
-}
-
-void InitValAST::Dump() const
-{
-    std::cout << "Init{";
-    exp->Dump();
-    std::cout << "}";
-}
-
-void StmtAST::Dump() const
-{
-    std::cout << "Stmt{";
-    if (type == 1)
-    {
-        lval->Dump();
-        std::cout << "=";
-        exp->Dump();
-    }
-    else
-    {
-        std::cout << "return ";
-        exp->Dump();
-    }
-    std::cout << ";}";
-}
-
-void LValAST::Dump() const
-{
-    std::cout << "LVal{";
-    std::cout << ident;
-    std::cout << "}";
-}
-
-void ExpAST::Dump() const
-{
-    std::cout << "Exp{";
-    lor_exp->Dump();
-    std::cout << "}";
-}
-
-void LOrExpAST::Dump() const
-{
-    std::cout << "LOrExp{";
-    if (type == 1)
-        land_exp->Dump();
-    else
-    {
-        lor_exp->Dump();
-        std::cout << "||";
-        land_exp->Dump();
-    }
-    std::cout << "}";
-}
-
-void LAndExpAST::Dump() const
-{
-    std::cout << "LAndExp{";
-    if (type == 1)
-        eq_exp->Dump();
-    else
-    {
-        land_exp->Dump();
-        std::cout << "&&";
-        eq_exp->Dump();
-    }
-    std::cout << "}";
-}
-
-void EqExpAST::Dump() const
-{
-    std::cout << "EqExp{";
-    if (type == 1)
-        rel_exp->Dump();
-    else
-    {
-        eq_exp->Dump();
-        std::cout << eq_op;
-        rel_exp->Dump();
-    }
-    std::cout << "}";
-}
-
-void RelExpAST::Dump() const
-{
-    std::cout << "RelExp{";
-    if (type == 1)
-        add_exp->Dump();
-    else
-    {
-        rel_exp->Dump();
-        std::cout << rel_op;
-        add_exp->Dump();
-    }
-    std::cout << "}";
-}
-
-void AddExpAST::Dump() const
-{
-    std::cout << "AddExp{";
-    if (type == 1)
-        mul_exp->Dump();
-    else
-    {
-        add_exp->Dump();
-        std::cout << add_op;
-        mul_exp->Dump();
-    }
-    std::cout << "}";
-}
-
-void MulExpAST::Dump() const
-{
-    std::cout << "MulExp{";
-    if (type == 1)
-        unary_exp->Dump();
-    else
-    {
-        mul_exp->Dump();
-        std::cout << mul_op;
-        unary_exp->Dump();
-    }
-    std::cout << "}";
-}
-
-void UnaryExpAST::Dump() const
-{
-    std::cout << "UnaryExp{";
-    if (type == 1)
-        primary_exp->Dump();
-    else
-    {
-        std::cout << unary_op;
-        unary_exp->Dump();
-    }
-    std::cout << "}";
-}
-
-void PrimaryExpAST::Dump() const
-{
-    std::cout << "PrimaryExp{";
-    if (type == 1)
-    {
-        std::cout << "(";
-        exp->Dump();
-        std::cout << ")";
-    }
-    else if (type == 2)
-        lval->Dump();
-    else
-        std::cout << number;
-    std::cout << "}";
+#endif
+    symbol_table_stack.pop_back();
 }
 
 /***************************************************************************************************************/
@@ -299,6 +76,9 @@ void PrimaryExpAST::Dump() const
 
 void *CompUnitAST::GenerateIR() const
 {
+#ifdef DEBUG
+    std::cout << "CompUnit" << std::endl;
+#endif
     std::vector<const void *> funcs{func_def->GenerateIR()};
     koopa_raw_program_t *ret = new koopa_raw_program_t();
     ret->values = generate_slice(KOOPA_RSIK_VALUE);
@@ -308,6 +88,9 @@ void *CompUnitAST::GenerateIR() const
 
 void *FuncDefAST::GenerateIR() const
 {
+#ifdef DEBUG
+    std::cout << "FuncDef" << std::endl;
+#endif
     koopa_raw_function_data_t *ret = new koopa_raw_function_data_t();
     // init ty
     koopa_raw_type_kind_t *ty = new koopa_raw_type_kind_t();
@@ -328,6 +111,9 @@ void *FuncDefAST::GenerateIR() const
 
 void *FuncTypeAST::GenerateIR() const
 {
+#ifdef DEBUG
+    std::cout << "FuncType" << std::endl;
+#endif
     if (func_type == "int")
         return (void *)generate_type(KOOPA_RTT_INT32);
     return nullptr;
@@ -335,7 +121,14 @@ void *FuncTypeAST::GenerateIR() const
 
 void *BlockAST::GenerateIR() const
 {
-    symbol_table.init();
+#ifdef DEBUG
+    std::cout << "Block----------------------" << std::endl;
+#endif
+    if (block_item_list == nullptr)
+    {
+        return nullptr;
+    }
+    symbol_table.add_table();
     koopa_raw_basic_block_data_t *ret = new koopa_raw_basic_block_data_t();
     ret->name = "%entry";
     ret->params = generate_slice(KOOPA_RSIK_VALUE);
@@ -352,6 +145,7 @@ void *BlockAST::GenerateIR() const
             if (last->kind.tag == KOOPA_RVT_RETURN)
             {
                 ret->insts = generate_slice(blockitems, KOOPA_RSIK_VALUE);
+                symbol_table.del_table();
                 return ret;
             }
         }
@@ -368,11 +162,43 @@ void *BlockAST::GenerateIR() const
         blockitems.push_back(ret);
     }
     ret->insts = generate_slice(blockitems, KOOPA_RSIK_VALUE);
+    symbol_table.del_table();
     return ret;
+}
+
+void *BlockAST::GenerateIR(std::vector<const void *> &inst_buf) const
+{
+#ifdef DEBUG
+    std::cout << "Block----------------------" << std::endl;
+#endif
+    if (block_item_list == nullptr)
+    {
+        return nullptr;
+    }
+    symbol_table.add_table();
+    for (auto block_item = (*block_item_list).begin();
+         block_item != (*block_item_list).end(); block_item++)
+    {
+        (*block_item)->GenerateIR(inst_buf);
+        if (inst_buf.size() > 0)
+        {
+            auto last = (koopa_raw_value_t)inst_buf.back();
+            if (last->kind.tag == KOOPA_RVT_RETURN)
+            {
+                symbol_table.del_table();
+                return nullptr;
+            }
+        }
+    }
+    symbol_table.del_table();
+    return nullptr;
 }
 
 void *BlockItemAST::GenerateIR(std::vector<const void *> &inst_buf) const
 {
+#ifdef DEBUG
+    std::cout << "BlockItem-------------------------" << std::endl;
+#endif
     if (type == 1)
         return decl->GenerateIR(inst_buf);
     return stmt->GenerateIR(inst_buf);
@@ -380,6 +206,9 @@ void *BlockItemAST::GenerateIR(std::vector<const void *> &inst_buf) const
 
 void *DeclAST::GenerateIR(std::vector<const void *> &inst_buf) const
 {
+#ifdef DEBUG
+    std::cout << "Decl" << std::endl;
+#endif
     if (type == 1)
         return const_decl->GenerateIR(inst_buf);
     return var_decl->GenerateIR(inst_buf);
@@ -387,6 +216,9 @@ void *DeclAST::GenerateIR(std::vector<const void *> &inst_buf) const
 
 void *ConstDeclAST::GenerateIR(std::vector<const void *> &inst_buf) const
 {
+#ifdef DEBUG
+    std::cout << "ConstDecl" << std::endl;
+#endif
     // koopa_raw_type_t type = (koopa_raw_type_t)btype->GenerateIR();
     for (auto const_def = (*const_def_list).begin();
          const_def != (*const_def_list).end(); const_def++)
@@ -399,6 +231,9 @@ void *ConstDeclAST::GenerateIR(std::vector<const void *> &inst_buf) const
 void *BTypeAST::GenerateIR() const
 {
     assert(0);
+#ifdef DEBUG
+    std::cout << "BType" << std::endl;
+#endif
     if (btype == "int")
         return (void *)generate_type(KOOPA_RTT_INT32);
     return nullptr;
@@ -406,6 +241,9 @@ void *BTypeAST::GenerateIR() const
 
 void *ConstDefAST::GenerateIR() const
 {
+#ifdef DEBUG
+    std::cout << "ConstDef" << std::endl;
+#endif
     int val = const_init_val->CalculateValue();
     SymbolTable::Value value = SymbolTable::Value(SymbolTable::Value::ValueType::Const, val);
     symbol_table.add_symbol(ident, value);
@@ -427,6 +265,9 @@ void *ConstExpAST::GenerateIR(koopa_raw_slice_t parent,
 
 void *VarDeclAST::GenerateIR(std::vector<const void *> &inst_buf) const
 {
+#ifdef DEBUG
+    std::cout << "VarDecl" << std::endl;
+#endif
     // koopa_raw_type_t type = (koopa_raw_type_t)btype->GenerateIR();
     for (auto var_def = (*var_def_list).begin();
          var_def != (*var_def_list).end(); var_def++)
@@ -438,6 +279,9 @@ void *VarDeclAST::GenerateIR(std::vector<const void *> &inst_buf) const
 
 void *VarDefAST::GenerateIR(std::vector<const void *> &inst_buf) const
 {
+#ifdef DEBUG
+    std::cout << "VarDef" << std::endl;
+#endif
     koopa_raw_value_data_t *ret = new koopa_raw_value_data();
     koopa_raw_slice_t used_by = generate_slice(ret, KOOPA_RSIK_VALUE);
     ret->ty = generate_type(KOOPA_RTT_POINTER, KOOPA_RTT_INT32);
@@ -446,7 +290,7 @@ void *VarDefAST::GenerateIR(std::vector<const void *> &inst_buf) const
     ret->used_by = generate_slice(KOOPA_RSIK_VALUE);
     ret->kind.tag = KOOPA_RVT_ALLOC;
     inst_buf.push_back(ret);
-    symbol_table.add_symbol(ident, SymbolTable::Value(SymbolTable::Value::Var, ret));
+    symbol_table.add_symbol(ident, SymbolTable::Value(SymbolTable::Value::Var, (koopa_raw_value_t)ret));
     if (type == 2)
     {
         koopa_raw_value_data_t *store = new koopa_raw_value_data();
@@ -463,11 +307,17 @@ void *VarDefAST::GenerateIR(std::vector<const void *> &inst_buf) const
 
 void *InitValAST::GenerateIR(koopa_raw_slice_t parent, std::vector<const void *> &inst_buf) const
 {
+#ifdef DEBUG
+    std::cout << "InitVal" << std::endl;
+#endif
     return exp->GenerateIR(parent, inst_buf);
 }
 
 void *StmtAST::GenerateIR(std::vector<const void *> &inst_buf) const
 {
+#ifdef DEBUG
+    std::cout << "Stmt" << std::endl;
+#endif
     koopa_raw_value_data_t *ret = new koopa_raw_value_data();
     koopa_raw_slice_t used_by = generate_slice(ret, KOOPA_RSIK_VALUE);
     ret->ty = generate_type(KOOPA_RTT_UNIT);
@@ -477,22 +327,36 @@ void *StmtAST::GenerateIR(std::vector<const void *> &inst_buf) const
     {
         ret->kind.tag = KOOPA_RVT_STORE;
         auto &store = ret->kind.data.store;
-        store.value = (koopa_raw_value_t)exp->GenerateIR(used_by, inst_buf);
         store.dest = (koopa_raw_value_t)symbol_table.get_value(lval->GetIdent()).data.var_value;
+        store.value = (koopa_raw_value_t)exp->GenerateIR(used_by, inst_buf);
+        inst_buf.push_back(ret);
+    }
+    else if (type == 2)
+    {
+        if (exp != nullptr)
+            exp->GenerateIR(used_by, inst_buf);
+    }
+    else if (type == 3)
+    {
+        block->GenerateIR(inst_buf);
     }
     else
     {
         ret->kind.tag = KOOPA_RVT_RETURN;
-        ret->kind.data.ret.value =
-            (const koopa_raw_value_data *)exp->GenerateIR(used_by, inst_buf);
+        if (exp != nullptr)
+            ret->kind.data.ret.value =
+                (koopa_raw_value_t)exp->GenerateIR(used_by, inst_buf);
+        inst_buf.push_back(ret);
     }
-    inst_buf.push_back(ret);
     return ret;
 }
 
 void *LValAST::GenerateIR(koopa_raw_slice_t parent,
                           std::vector<const void *> &inst_buf) const
 {
+#ifdef DEBUG
+    std::cout << "LVal" << std::endl;
+#endif
     SymbolTable::Value value = symbol_table.get_value(ident);
     koopa_raw_value_data_t *ret = new koopa_raw_value_data();
     ret->ty = generate_type(KOOPA_RTT_INT32);
@@ -515,12 +379,18 @@ void *LValAST::GenerateIR(koopa_raw_slice_t parent,
 void *ExpAST::GenerateIR(koopa_raw_slice_t parent,
                          std::vector<const void *> &inst_buf) const
 {
+#ifdef DEBUG
+    std::cout << "Exp" << std::endl;
+#endif
     return lor_exp->GenerateIR(parent, inst_buf);
 }
 
 void *LOrExpAST::GenerateIR(koopa_raw_slice_t parent,
                             std::vector<const void *> &inst_buf) const
 {
+#ifdef DEBUG
+    std::cout << "LOrExp" << std::endl;
+#endif
     // A || B = A!=0 | B!=0
     if (type == 1)
         return land_exp->GenerateIR(parent, inst_buf);
@@ -541,6 +411,9 @@ void *LOrExpAST::GenerateIR(koopa_raw_slice_t parent,
 void *LAndExpAST::GenerateIR(koopa_raw_slice_t parent,
                              std::vector<const void *> &inst_buf) const
 {
+#ifdef DEBUG
+    std::cout << "LAndExp" << std::endl;
+#endif
     if (type == 1)
         return eq_exp->GenerateIR(parent, inst_buf);
     koopa_raw_value_data_t *ret = new koopa_raw_value_data();
@@ -560,6 +433,9 @@ void *LAndExpAST::GenerateIR(koopa_raw_slice_t parent,
 void *EqExpAST::GenerateIR(koopa_raw_slice_t parent,
                            std::vector<const void *> &inst_buf) const
 {
+#ifdef DEBUG
+    std::cout << "EqExp" << std::endl;
+#endif
     if (type == 1)
         return rel_exp->GenerateIR(parent, inst_buf);
     koopa_raw_value_data_t *ret = new koopa_raw_value_data();
@@ -586,6 +462,9 @@ void *EqExpAST::GenerateIR(koopa_raw_slice_t parent,
 void *RelExpAST::GenerateIR(koopa_raw_slice_t parent,
                             std::vector<const void *> &inst_buf) const
 {
+#ifdef DEBUG
+    std::cout << "RelExp" << std::endl;
+#endif
     if (type == 1)
         return add_exp->GenerateIR(parent, inst_buf);
     koopa_raw_value_data_t *ret = new koopa_raw_value_data();
@@ -620,6 +499,9 @@ void *RelExpAST::GenerateIR(koopa_raw_slice_t parent,
 void *AddExpAST::GenerateIR(koopa_raw_slice_t parent,
                             std::vector<const void *> &inst_buf) const
 {
+#ifdef DEBUG
+    std::cout << "AddExp" << std::endl;
+#endif
     if (type == 1)
         return mul_exp->GenerateIR(parent, inst_buf);
     koopa_raw_value_data_t *ret = new koopa_raw_value_data();
@@ -646,6 +528,9 @@ void *AddExpAST::GenerateIR(koopa_raw_slice_t parent,
 void *MulExpAST::GenerateIR(koopa_raw_slice_t parent,
                             std::vector<const void *> &inst_buf) const
 {
+#ifdef DEBUG
+    std::cout << "MulExp" << std::endl;
+#endif
     if (type == 1)
         return unary_exp->GenerateIR(parent, inst_buf);
     koopa_raw_value_data_t *ret = new koopa_raw_value_data();
@@ -676,6 +561,9 @@ void *MulExpAST::GenerateIR(koopa_raw_slice_t parent,
 void *UnaryExpAST::GenerateIR(koopa_raw_slice_t parent,
                               std::vector<const void *> &inst_buf) const
 {
+#ifdef DEBUG
+    std::cout << "UnaryExp" << std::endl;
+#endif
     if (type == 1)
         return primary_exp->GenerateIR(parent, inst_buf);
     if (unary_op == "+")
@@ -705,6 +593,9 @@ void *UnaryExpAST::GenerateIR(koopa_raw_slice_t parent,
 void *PrimaryExpAST::GenerateIR(koopa_raw_slice_t parent,
                                 std::vector<const void *> &inst_buf) const
 {
+#ifdef DEBUG
+    std::cout << "PrimaryExp" << std::endl;
+#endif
     if (type == 1)
         return exp->GenerateIR(parent, inst_buf);
     else if (type == 2)
@@ -832,6 +723,9 @@ std::int32_t LValAST::CalculateValue() const
 
 std::string LValAST::GetIdent() const
 {
+#ifdef DEBUG
+    std::cout << "LVal::GetIdent" << std::endl;
+#endif
     return ident;
 }
 
@@ -908,4 +802,305 @@ koopa_raw_value_data_t *generate_number(koopa_raw_slice_t parent, int32_t number
     ret->kind.tag = KOOPA_RVT_INTEGER;
     ret->kind.data.integer.value = number;
     return ret;
+}
+
+/*********************************************************************************************************/
+/************************************************Dump*****************************************************/
+/*********************************************************************************************************/
+
+void CompUnitAST::Dump() const
+{
+    std::cout << "CompUnit{";
+    func_def->Dump();
+    std::cout << "}";
+}
+
+void FuncDefAST::Dump() const
+{
+    std::cout << "FuncDef{";
+    func_type->Dump();
+    std::cout << ident << "()";
+    block->Dump();
+    std::cout << "}";
+}
+
+void FuncTypeAST::Dump() const
+{
+    std::cout << "FuncType{";
+    std::cout << func_type;
+    std::cout << "}";
+}
+
+void BlockAST::Dump() const
+{
+    std::cout << std::endl
+              << "Block{";
+    if (block_item_list == nullptr)
+    {
+        std::cout << "{}}";
+        return;
+    }
+    for (auto block_item = (*block_item_list).begin();
+         block_item != (*block_item_list).end(); block_item++)
+    {
+        std::cout << std::endl
+                  << "{";
+        (*block_item)->Dump();
+        std::cout << "}";
+    }
+    std::cout << "}";
+}
+
+void BlockItemAST::Dump() const
+{
+    std::cout << "BlockItem{";
+    if (type == 1)
+        decl->Dump();
+    else
+        stmt->Dump();
+    std::cout << "}";
+}
+
+void DeclAST::Dump() const
+{
+    std::cout << "Decl{";
+    if (type == 1)
+        const_decl->Dump();
+    else
+        var_decl->Dump();
+    std::cout << "}";
+}
+
+void ConstDeclAST::Dump() const
+{
+    std::cout << "ConstDecl{";
+    std::cout << "const ";
+    btype->Dump();
+    (*(*const_def_list).begin())->Dump();
+    for (auto const_def = (*const_def_list).begin() + 1;
+         const_def != (*const_def_list).end(); const_def++)
+    {
+        std::cout << ",";
+        (*const_def)->Dump();
+    }
+    std::cout << ";}";
+}
+
+void BTypeAST::Dump() const
+{
+    std::cout << "BType{";
+    std::cout << btype;
+    std::cout << "}";
+}
+
+void ConstDefAST::Dump() const
+{
+    std::cout << "ConstDef{";
+    std::cout << ident << "=";
+    const_init_val->Dump();
+    std::cout << "}";
+}
+
+void ConstInitValAST::Dump() const
+{
+    std::cout << "ConstInitVal{";
+    const_exp->Dump();
+    std::cout << "}";
+}
+
+void ConstExpAST::Dump() const
+{
+    std::cout << "ConstExp{";
+    exp->Dump();
+    std::cout << "}";
+}
+
+void VarDeclAST::Dump() const
+{
+    std::cout << "VarDecl{";
+    btype->Dump();
+    (*(*var_def_list).begin())->Dump();
+    for (auto var_def = (*var_def_list).begin() + 1;
+         var_def != (*var_def_list).end(); var_def++)
+    {
+        std::cout << ",";
+        (*var_def)->Dump();
+    }
+    std::cout << ";}";
+}
+
+void VarDefAST::Dump() const
+{
+    std::cout << "VarDef{";
+    std::cout << ident;
+    if (type == 2)
+    {
+        std::cout << "=";
+        init_val->Dump();
+    }
+    std::cout << "}";
+}
+
+void InitValAST::Dump() const
+{
+    std::cout << "Init{";
+    exp->Dump();
+    std::cout << "}";
+}
+
+void StmtAST::Dump() const
+{
+    std::cout << "Stmt{";
+    if (type == 1)
+    {
+        lval->Dump();
+        std::cout << "=";
+        exp->Dump();
+        std::cout << ";";
+    }
+    else if (type == 2)
+    {
+        if (exp != nullptr)
+            exp->Dump();
+        std::cout << ";";
+    }
+    else if (type == 3)
+    {
+        block->Dump();
+    }
+    else
+    {
+        std::cout << "return";
+        if (exp != nullptr)
+            exp->Dump();
+        std::cout << ";";
+    }
+    std::cout << "}";
+}
+
+void LValAST::Dump() const
+{
+    std::cout << "LVal{";
+    std::cout << ident;
+    std::cout << "}";
+}
+
+void ExpAST::Dump() const
+{
+    std::cout << "Exp{";
+    lor_exp->Dump();
+    std::cout << "}";
+}
+
+void LOrExpAST::Dump() const
+{
+    std::cout << "LOrExp{";
+    if (type == 1)
+        land_exp->Dump();
+    else
+    {
+        lor_exp->Dump();
+        std::cout << "||";
+        land_exp->Dump();
+    }
+    std::cout << "}";
+}
+
+void LAndExpAST::Dump() const
+{
+    std::cout << "LAndExp{";
+    if (type == 1)
+        eq_exp->Dump();
+    else
+    {
+        land_exp->Dump();
+        std::cout << "&&";
+        eq_exp->Dump();
+    }
+    std::cout << "}";
+}
+
+void EqExpAST::Dump() const
+{
+    std::cout << "EqExp{";
+    if (type == 1)
+        rel_exp->Dump();
+    else
+    {
+        eq_exp->Dump();
+        std::cout << eq_op;
+        rel_exp->Dump();
+    }
+    std::cout << "}";
+}
+
+void RelExpAST::Dump() const
+{
+    std::cout << "RelExp{";
+    if (type == 1)
+        add_exp->Dump();
+    else
+    {
+        rel_exp->Dump();
+        std::cout << rel_op;
+        add_exp->Dump();
+    }
+    std::cout << "}";
+}
+
+void AddExpAST::Dump() const
+{
+    std::cout << "AddExp{";
+    if (type == 1)
+        mul_exp->Dump();
+    else
+    {
+        add_exp->Dump();
+        std::cout << add_op;
+        mul_exp->Dump();
+    }
+    std::cout << "}";
+}
+
+void MulExpAST::Dump() const
+{
+    std::cout << "MulExp{";
+    if (type == 1)
+        unary_exp->Dump();
+    else
+    {
+        mul_exp->Dump();
+        std::cout << mul_op;
+        unary_exp->Dump();
+    }
+    std::cout << "}";
+}
+
+void UnaryExpAST::Dump() const
+{
+    std::cout << "UnaryExp{";
+    if (type == 1)
+        primary_exp->Dump();
+    else
+    {
+        std::cout << unary_op;
+        unary_exp->Dump();
+    }
+    std::cout << "}";
+}
+
+void PrimaryExpAST::Dump() const
+{
+    std::cout << "PrimaryExp{";
+    if (type == 1)
+    {
+        std::cout << "(";
+        exp->Dump();
+        std::cout << ")";
+    }
+    else if (type == 2)
+        lval->Dump();
+    else
+        std::cout << number;
+    std::cout << "}";
 }
