@@ -70,6 +70,67 @@ void SymbolTable::del_table()
     symbol_table_stack.pop_back();
 }
 
+/**************************************************************************************************************/
+/************************************************BlockList*****************************************************/
+/**************************************************************************************************************/
+
+void BlockList::init(std::vector<const void *> *blocks)
+{
+#ifdef DEBUG
+    std::cout << "BlockList::init" << std::endl;
+#endif
+    this->block_list = *blocks;
+    tmp_inst_buf.clear();
+}
+
+void BlockList::add_block(koopa_raw_basic_block_data_t *block)
+{
+#ifdef DEBUG
+    std::cout << "BlockList::add_block" << std::endl;
+#endif
+    block->insts.buffer = nullptr;
+    block->insts.len = 0;
+    block_list.push_back(block);
+}
+
+void BlockList::add_inst(const void *inst)
+{
+#ifdef DEBUG
+    std::cout << "BlockList::add_inst" << std::endl;
+#endif
+    tmp_inst_buf.push_back(inst);
+}
+
+void BlockList::finish_block()
+{
+#ifdef DEBUG
+    std::cout << "BlockList::finish_block" << std::endl;
+#endif
+    if (block_list.size() == 0)
+    {
+        return;
+    }
+    if (tmp_inst_buf.size() == 0)
+    {
+        block_list.pop_back();
+        return;
+    }
+    for (auto inst = tmp_inst_buf.begin(); inst != tmp_inst_buf.end(); inst++)
+    {
+        koopa_raw_value_t inst = (koopa_raw_value_t)tmp_inst_list[i];
+        if (inst->kind.tag == KOOPA_RVT_RETURN || inst->kind.tag == KOOPA_RVT_BRANCH || inst->kind.tag == KOOPA_RVT_JUMP)
+        {
+            tmp_inst_buf.erase(tmp_inst_buf.begin() + i + 1, tmp_inst_buf.end());
+            break;
+        }
+    }
+    koopa_raw_basic_block_data_t *last = (koopa_raw_basic_block_data_t *)block_list.back();
+    assert(last->insts.buffer == nullptr);
+    last->insts = generate_slice(tmp_inst_buf, KOOPA_RSIK_VALUE);
+    tmp_inst_buf.clear();
+    return;
+}
+
 /***************************************************************************************************************/
 /************************************************GenerateIR*****************************************************/
 /***************************************************************************************************************/
@@ -99,11 +160,20 @@ void *FuncDefAST::GenerateIR() const
     ty->data.function.ret = (const struct koopa_raw_type_kind *)func_type->GenerateIR();
     ret->ty = ty;
     char *name = new char[ident.size() + 1];
+    name[strlen(name) - 1] = '\0';
     ret->name = strcpy(name, ("@" + ident).c_str());
     // init params
     ret->params = generate_slice(KOOPA_RSIK_VALUE);
     // init blocks
-    std::vector<const void *> blocks{block->GenerateIR()};
+    std::vector<const void *> blocks;
+    block_list.init(&blocks);
+    koopa_raw_basic_block_data_t *entry = new koopa_raw_basic_block_data_t();
+    entry->name = "%entry";
+    entry->params = generate_slice(KOOPA_RSIK_VALUE);
+    entry->used_by = generate_slice(KOOPA_RSIK_VALUE);
+    block_list.add_block(entry);
+    block->GenerateIR();
+    block_list.finish_block();
     ret->bbs = generate_slice(blocks, KOOPA_RSIK_BASIC_BLOCK);
 
     return ret;
@@ -129,92 +199,37 @@ void *BlockAST::GenerateIR() const
         return nullptr;
     }
     symbol_table.add_table();
-    koopa_raw_basic_block_data_t *ret = new koopa_raw_basic_block_data_t();
-    ret->name = "%entry";
-    ret->params = generate_slice(KOOPA_RSIK_VALUE);
-    ret->used_by = generate_slice(KOOPA_RSIK_VALUE);
 
-    std::vector<const void *> blockitems;
     for (auto block_item = (*block_item_list).begin();
          block_item != (*block_item_list).end(); block_item++)
     {
-        (*block_item)->GenerateIR(blockitems);
-        if (blockitems.size() > 0)
-        {
-            auto last = (koopa_raw_value_t)blockitems.back();
-            if (last->kind.tag == KOOPA_RVT_RETURN)
-            {
-                ret->insts = generate_slice(blockitems, KOOPA_RSIK_VALUE);
-                symbol_table.del_table();
-                return ret;
-            }
-        }
-    }
-    auto last = (koopa_raw_value_t)blockitems.back();
-    if (last->kind.tag != KOOPA_RVT_RETURN)
-    {
-        koopa_raw_value_data_t *ret = new koopa_raw_value_data();
-        ret->ty = generate_type(KOOPA_RTT_UNIT);
-        ret->name = nullptr;
-        ret->used_by = generate_slice(KOOPA_RSIK_VALUE);
-        ret->kind.tag = KOOPA_RVT_RETURN;
-        ret->kind.data.ret.value = generate_number(generate_slice(KOOPA_RSIK_VALUE), 0);
-        blockitems.push_back(ret);
-    }
-    ret->insts = generate_slice(blockitems, KOOPA_RSIK_VALUE);
-    symbol_table.del_table();
-    return ret;
-}
-
-void *BlockAST::GenerateIR(std::vector<const void *> &inst_buf) const
-{
-#ifdef DEBUG
-    std::cout << "Block----------------------" << std::endl;
-#endif
-    if (block_item_list == nullptr)
-    {
-        return nullptr;
-    }
-    symbol_table.add_table();
-    for (auto block_item = (*block_item_list).begin();
-         block_item != (*block_item_list).end(); block_item++)
-    {
-        (*block_item)->GenerateIR(inst_buf);
-        if (inst_buf.size() > 0)
-        {
-            auto last = (koopa_raw_value_t)inst_buf.back();
-            if (last->kind.tag == KOOPA_RVT_RETURN)
-            {
-                symbol_table.del_table();
-                return nullptr;
-            }
-        }
+        (*block_item)->GenerateIR();
     }
     symbol_table.del_table();
     return nullptr;
 }
 
-void *BlockItemAST::GenerateIR(std::vector<const void *> &inst_buf) const
+void *BlockItemAST::GenerateIR() const
 {
 #ifdef DEBUG
     std::cout << "BlockItem-------------------------" << std::endl;
 #endif
     if (type == 1)
-        return decl->GenerateIR(inst_buf);
-    return stmt->GenerateIR(inst_buf);
+        return decl->GenerateIR();
+    return stmt->GenerateIR();
 }
 
-void *DeclAST::GenerateIR(std::vector<const void *> &inst_buf) const
+void *DeclAST::GenerateIR() const
 {
 #ifdef DEBUG
     std::cout << "Decl" << std::endl;
 #endif
     if (type == 1)
-        return const_decl->GenerateIR(inst_buf);
-    return var_decl->GenerateIR(inst_buf);
+        return const_decl->GenerateIR();
+    return var_decl->GenerateIR();
 }
 
-void *ConstDeclAST::GenerateIR(std::vector<const void *> &inst_buf) const
+void *ConstDeclAST::GenerateIR() const
 {
 #ifdef DEBUG
     std::cout << "ConstDecl" << std::endl;
@@ -256,14 +271,13 @@ void *ConstInitValAST::GenerateIR() const
     return nullptr;
 }
 
-void *ConstExpAST::GenerateIR(koopa_raw_slice_t parent,
-                              std::vector<const void *> &inst_buf) const
+void *ConstExpAST::GenerateIR() const
 {
     assert(0);
     return nullptr;
 }
 
-void *VarDeclAST::GenerateIR(std::vector<const void *> &inst_buf) const
+void *VarDeclAST::GenerateIR() const
 {
 #ifdef DEBUG
     std::cout << "VarDecl" << std::endl;
@@ -272,12 +286,12 @@ void *VarDeclAST::GenerateIR(std::vector<const void *> &inst_buf) const
     for (auto var_def = (*var_def_list).begin();
          var_def != (*var_def_list).end(); var_def++)
     {
-        (*var_def)->GenerateIR(inst_buf);
+        (*var_def)->GenerateIR();
     }
     return nullptr;
 }
 
-void *VarDefAST::GenerateIR(std::vector<const void *> &inst_buf) const
+void *VarDefAST::GenerateIR() const
 {
 #ifdef DEBUG
     std::cout << "VarDef" << std::endl;
@@ -286,10 +300,11 @@ void *VarDefAST::GenerateIR(std::vector<const void *> &inst_buf) const
     koopa_raw_slice_t used_by = generate_slice(ret, KOOPA_RSIK_VALUE);
     ret->ty = generate_type(KOOPA_RTT_POINTER, KOOPA_RTT_INT32);
     char *name = new char[ident.size() + 1];
+    name[strlen(name) - 1] = '\0';
     ret->name = strcpy(name, ("@" + ident).c_str());
     ret->used_by = generate_slice(KOOPA_RSIK_VALUE);
     ret->kind.tag = KOOPA_RVT_ALLOC;
-    inst_buf.push_back(ret);
+    block_list.add_inst(ret);
     symbol_table.add_symbol(ident, SymbolTable::Value(SymbolTable::Value::Var, (koopa_raw_value_t)ret));
     if (type == 2)
     {
@@ -298,22 +313,22 @@ void *VarDefAST::GenerateIR(std::vector<const void *> &inst_buf) const
         store->used_by = generate_slice(KOOPA_RSIK_VALUE);
         store->kind.tag = KOOPA_RVT_STORE;
         auto &store_data = store->kind.data.store;
-        store_data.value = (koopa_raw_value_t)init_val->GenerateIR(used_by, inst_buf);
+        store_data.value = (koopa_raw_value_t)init_val->GenerateIR();
         store_data.dest = (koopa_raw_value_t)ret;
-        inst_buf.push_back(store);
+        block_list.add_inst(store);
     }
     return nullptr;
 }
 
-void *InitValAST::GenerateIR(koopa_raw_slice_t parent, std::vector<const void *> &inst_buf) const
+void *InitValAST::GenerateIR() const
 {
 #ifdef DEBUG
     std::cout << "InitVal" << std::endl;
 #endif
-    return exp->GenerateIR(parent, inst_buf);
+    return exp->GenerateIR();
 }
 
-void *StmtAST::GenerateIR(std::vector<const void *> &inst_buf) const
+void *StmtAST::GenerateIR() const
 {
 #ifdef DEBUG
     std::cout << "Stmt" << std::endl;
@@ -329,30 +344,29 @@ void *StmtAST::GenerateIR(std::vector<const void *> &inst_buf) const
         auto &store = ret->kind.data.store;
         store.dest = (koopa_raw_value_t)symbol_table.get_value(lval->GetIdent()).data.var_value;
         store.value = (koopa_raw_value_t)exp->GenerateIR(used_by, inst_buf);
-        inst_buf.push_back(ret);
+        block_list.add_inst(ret);
     }
     else if (type == 2)
     {
         if (exp != nullptr)
-            exp->GenerateIR(used_by, inst_buf);
+            exp->GenerateIR();
     }
     else if (type == 3)
     {
-        block->GenerateIR(inst_buf);
+        block->GenerateIR();
     }
     else
     {
         ret->kind.tag = KOOPA_RVT_RETURN;
         if (exp != nullptr)
             ret->kind.data.ret.value =
-                (koopa_raw_value_t)exp->GenerateIR(used_by, inst_buf);
-        inst_buf.push_back(ret);
+                (koopa_raw_value_t)exp->GenerateIR();
+        block_list.add_inst(ret);
     }
     return ret;
 }
 
-void *LValAST::GenerateIR(koopa_raw_slice_t parent,
-                          std::vector<const void *> &inst_buf) const
+void *LValAST::GenerateIR() const
 {
 #ifdef DEBUG
     std::cout << "LVal" << std::endl;
@@ -361,7 +375,7 @@ void *LValAST::GenerateIR(koopa_raw_slice_t parent,
     koopa_raw_value_data_t *ret = new koopa_raw_value_data();
     ret->ty = generate_type(KOOPA_RTT_INT32);
     ret->name = nullptr;
-    ret->used_by = parent;
+    ret->used_by = slice(KOOPA_RSIK_VALUE);
     if (value.type == SymbolTable::Value::Const)
     {
         ret->kind.tag = KOOPA_RVT_INTEGER;
@@ -371,22 +385,20 @@ void *LValAST::GenerateIR(koopa_raw_slice_t parent,
     {
         ret->kind.tag = KOOPA_RVT_LOAD;
         ret->kind.data.load.src = (koopa_raw_value_t)value.data.var_value;
-        inst_buf.push_back(ret);
+        block_list.add_inst(ret);
     }
     return ret;
 }
 
-void *ExpAST::GenerateIR(koopa_raw_slice_t parent,
-                         std::vector<const void *> &inst_buf) const
+void *ExpAST::GenerateIR() const
 {
 #ifdef DEBUG
     std::cout << "Exp" << std::endl;
 #endif
-    return lor_exp->GenerateIR(parent, inst_buf);
+    return lor_exp->GenerateIR();
 }
 
-void *LOrExpAST::GenerateIR(koopa_raw_slice_t parent,
-                            std::vector<const void *> &inst_buf) const
+void *LOrExpAST::GenerateIR() const
 {
 #ifdef DEBUG
     std::cout << "LOrExp" << std::endl;
