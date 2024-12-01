@@ -79,7 +79,7 @@ void BlockList::init(std::vector<const void *> *blocks)
 #ifdef DEBUG
     std::cout << "BlockList::init" << std::endl;
 #endif
-    this->block_list = *blocks;
+    this->block_list = blocks;
     tmp_inst_buf.clear();
 }
 
@@ -90,7 +90,7 @@ void BlockList::add_block(koopa_raw_basic_block_data_t *block)
 #endif
     block->insts.buffer = nullptr;
     block->insts.len = 0;
-    block_list.push_back(block);
+    block_list->push_back(block);
 }
 
 void BlockList::add_inst(const void *inst)
@@ -106,25 +106,25 @@ void BlockList::finish_block()
 #ifdef DEBUG
     std::cout << "BlockList::finish_block" << std::endl;
 #endif
-    if (block_list.size() == 0)
+    if (block_list->size() == 0)
     {
         return;
     }
     if (tmp_inst_buf.size() == 0)
     {
-        block_list.pop_back();
+        block_list->pop_back();
         return;
     }
-    for (auto inst = tmp_inst_buf.begin(); inst != tmp_inst_buf.end(); inst++)
+    for (unsigned i = 0; i < tmp_inst_buf.size(); i++)
     {
-        koopa_raw_value_t inst = (koopa_raw_value_t)tmp_inst_list[i];
+        koopa_raw_value_t inst = (koopa_raw_value_t)tmp_inst_buf[i];
         if (inst->kind.tag == KOOPA_RVT_RETURN || inst->kind.tag == KOOPA_RVT_BRANCH || inst->kind.tag == KOOPA_RVT_JUMP)
         {
             tmp_inst_buf.erase(tmp_inst_buf.begin() + i + 1, tmp_inst_buf.end());
             break;
         }
     }
-    koopa_raw_basic_block_data_t *last = (koopa_raw_basic_block_data_t *)block_list.back();
+    koopa_raw_basic_block_data_t *last = (koopa_raw_basic_block_data_t *)block_list->back();
     assert(last->insts.buffer == nullptr);
     last->insts = generate_slice(tmp_inst_buf, KOOPA_RSIK_VALUE);
     tmp_inst_buf.clear();
@@ -159,8 +159,8 @@ void *FuncDefAST::GenerateIR() const
     ty->data.function.params = generate_slice(KOOPA_RSIK_TYPE);
     ty->data.function.ret = (const struct koopa_raw_type_kind *)func_type->GenerateIR();
     ret->ty = ty;
-    char *name = new char[ident.size() + 1];
-    name[strlen(name) - 1] = '\0';
+    char *name = new char[ident.size() + 2];
+    name[ident.size() + 1] = '\0';
     ret->name = strcpy(name, ("@" + ident).c_str());
     // init params
     ret->params = generate_slice(KOOPA_RSIK_VALUE);
@@ -297,10 +297,9 @@ void *VarDefAST::GenerateIR() const
     std::cout << "VarDef" << std::endl;
 #endif
     koopa_raw_value_data_t *ret = new koopa_raw_value_data();
-    koopa_raw_slice_t used_by = generate_slice(ret, KOOPA_RSIK_VALUE);
     ret->ty = generate_type(KOOPA_RTT_POINTER, KOOPA_RTT_INT32);
-    char *name = new char[ident.size() + 1];
-    name[strlen(name) - 1] = '\0';
+    char *name = new char[ident.size() + 2];
+    name[ident.size() + 1] = '\0';
     ret->name = strcpy(name, ("@" + ident).c_str());
     ret->used_by = generate_slice(KOOPA_RSIK_VALUE);
     ret->kind.tag = KOOPA_RVT_ALLOC;
@@ -334,28 +333,27 @@ void *StmtAST::GenerateIR() const
     std::cout << "Stmt" << std::endl;
 #endif
     koopa_raw_value_data_t *ret = new koopa_raw_value_data();
-    koopa_raw_slice_t used_by = generate_slice(ret, KOOPA_RSIK_VALUE);
     ret->ty = generate_type(KOOPA_RTT_UNIT);
     ret->name = nullptr;
     ret->used_by = generate_slice(KOOPA_RSIK_VALUE);
-    if (type == 1)
+    if (type == StmtAST::ASSIGN)
     {
         ret->kind.tag = KOOPA_RVT_STORE;
         auto &store = ret->kind.data.store;
         store.dest = (koopa_raw_value_t)symbol_table.get_value(lval->GetIdent()).data.var_value;
-        store.value = (koopa_raw_value_t)exp->GenerateIR(used_by, inst_buf);
+        store.value = (koopa_raw_value_t)exp->GenerateIR();
         block_list.add_inst(ret);
     }
-    else if (type == 2)
+    else if (type == StmtAST::EXP)
     {
         if (exp != nullptr)
             exp->GenerateIR();
     }
-    else if (type == 3)
+    else if (type == StmtAST::BLOCK)
     {
         block->GenerateIR();
     }
-    else
+    else if (type == StmtAST::RETURN)
     {
         ret->kind.tag = KOOPA_RVT_RETURN;
         if (exp != nullptr)
@@ -375,7 +373,7 @@ void *LValAST::GenerateIR() const
     koopa_raw_value_data_t *ret = new koopa_raw_value_data();
     ret->ty = generate_type(KOOPA_RTT_INT32);
     ret->name = nullptr;
-    ret->used_by = slice(KOOPA_RSIK_VALUE);
+    ret->used_by = generate_slice(KOOPA_RSIK_VALUE);
     if (value.type == SymbolTable::Value::Const)
     {
         ret->kind.tag = KOOPA_RVT_INTEGER;
@@ -405,56 +403,51 @@ void *LOrExpAST::GenerateIR() const
 #endif
     // A || B = A!=0 | B!=0
     if (type == 1)
-        return land_exp->GenerateIR(parent, inst_buf);
+        return land_exp->GenerateIR();
     koopa_raw_value_data_t *ret = new koopa_raw_value_data();
-    koopa_raw_slice_t used_by = generate_slice(ret, KOOPA_RSIK_VALUE);
     ret->ty = generate_type(KOOPA_RTT_INT32);
     ret->name = nullptr;
-    ret->used_by = parent;
+    ret->used_by = generate_slice(KOOPA_RSIK_VALUE);
     ret->kind.tag = KOOPA_RVT_BINARY;
     auto &binary = ret->kind.data.binary;
     binary.op = KOOPA_RBO_OR;
-    binary.lhs = (koopa_raw_value_t)generate_bool(used_by, inst_buf, (koopa_raw_value_t)lor_exp->GenerateIR(used_by, inst_buf));
-    binary.rhs = (koopa_raw_value_t)generate_bool(used_by, inst_buf, (koopa_raw_value_t)land_exp->GenerateIR(used_by, inst_buf));
-    inst_buf.push_back(ret);
+    binary.lhs = (koopa_raw_value_t)generate_bool((koopa_raw_value_t)lor_exp->GenerateIR());
+    binary.rhs = (koopa_raw_value_t)generate_bool((koopa_raw_value_t)land_exp->GenerateIR());
+    block_list.add_inst(ret);
     return ret;
 }
 
-void *LAndExpAST::GenerateIR(koopa_raw_slice_t parent,
-                             std::vector<const void *> &inst_buf) const
+void *LAndExpAST::GenerateIR() const
 {
 #ifdef DEBUG
     std::cout << "LAndExp" << std::endl;
 #endif
     if (type == 1)
-        return eq_exp->GenerateIR(parent, inst_buf);
+        return eq_exp->GenerateIR();
     koopa_raw_value_data_t *ret = new koopa_raw_value_data();
-    koopa_raw_slice_t used_by = generate_slice(ret, KOOPA_RSIK_VALUE);
     ret->ty = generate_type(KOOPA_RTT_INT32);
     ret->name = nullptr;
-    ret->used_by = parent;
+    ret->used_by = generate_slice(KOOPA_RSIK_VALUE);
     ret->kind.tag = KOOPA_RVT_BINARY;
     auto &binary = ret->kind.data.binary;
     binary.op = KOOPA_RBO_AND;
-    binary.lhs = (koopa_raw_value_t)generate_bool(used_by, inst_buf, (koopa_raw_value_t)land_exp->GenerateIR(used_by, inst_buf));
-    binary.rhs = (koopa_raw_value_t)generate_bool(used_by, inst_buf, (koopa_raw_value_t)eq_exp->GenerateIR(used_by, inst_buf));
-    inst_buf.push_back(ret);
+    binary.lhs = (koopa_raw_value_t)generate_bool((koopa_raw_value_t)land_exp->GenerateIR());
+    binary.rhs = (koopa_raw_value_t)generate_bool((koopa_raw_value_t)eq_exp->GenerateIR());
+    block_list.add_inst(ret);
     return ret;
 }
 
-void *EqExpAST::GenerateIR(koopa_raw_slice_t parent,
-                           std::vector<const void *> &inst_buf) const
+void *EqExpAST::GenerateIR() const
 {
 #ifdef DEBUG
     std::cout << "EqExp" << std::endl;
 #endif
     if (type == 1)
-        return rel_exp->GenerateIR(parent, inst_buf);
+        return rel_exp->GenerateIR();
     koopa_raw_value_data_t *ret = new koopa_raw_value_data();
-    koopa_raw_slice_t used_by = generate_slice(ret, KOOPA_RSIK_VALUE);
     ret->ty = generate_type(KOOPA_RTT_INT32);
     ret->name = nullptr;
-    ret->used_by = parent;
+    ret->used_by = generate_slice(KOOPA_RSIK_VALUE);
     ret->kind.tag = KOOPA_RVT_BINARY;
     auto &binary = ret->kind.data.binary;
     if (eq_op == "==")
@@ -465,25 +458,23 @@ void *EqExpAST::GenerateIR(koopa_raw_slice_t parent,
     {
         binary.op = KOOPA_RBO_NOT_EQ;
     }
-    binary.lhs = (koopa_raw_value_t)eq_exp->GenerateIR(used_by, inst_buf);
-    binary.rhs = (koopa_raw_value_t)rel_exp->GenerateIR(used_by, inst_buf);
-    inst_buf.push_back(ret);
+    binary.lhs = (koopa_raw_value_t)eq_exp->GenerateIR();
+    binary.rhs = (koopa_raw_value_t)rel_exp->GenerateIR();
+    block_list.add_inst(ret);
     return ret;
 }
 
-void *RelExpAST::GenerateIR(koopa_raw_slice_t parent,
-                            std::vector<const void *> &inst_buf) const
+void *RelExpAST::GenerateIR() const
 {
 #ifdef DEBUG
     std::cout << "RelExp" << std::endl;
 #endif
     if (type == 1)
-        return add_exp->GenerateIR(parent, inst_buf);
+        return add_exp->GenerateIR();
     koopa_raw_value_data_t *ret = new koopa_raw_value_data();
-    koopa_raw_slice_t used_by = generate_slice(ret, KOOPA_RSIK_VALUE);
     ret->ty = generate_type(KOOPA_RTT_INT32);
     ret->name = nullptr;
-    ret->used_by = parent;
+    ret->used_by = generate_slice(KOOPA_RSIK_VALUE);
     ret->kind.tag = KOOPA_RVT_BINARY;
     auto &binary = ret->kind.data.binary;
     if (rel_op == "<")
@@ -502,25 +493,23 @@ void *RelExpAST::GenerateIR(koopa_raw_slice_t parent,
     {
         binary.op = KOOPA_RBO_GE;
     }
-    binary.lhs = (koopa_raw_value_t)rel_exp->GenerateIR(used_by, inst_buf);
-    binary.rhs = (koopa_raw_value_t)add_exp->GenerateIR(used_by, inst_buf);
-    inst_buf.push_back(ret);
+    binary.lhs = (koopa_raw_value_t)rel_exp->GenerateIR();
+    binary.rhs = (koopa_raw_value_t)add_exp->GenerateIR();
+    block_list.add_inst(ret);
     return ret;
 }
 
-void *AddExpAST::GenerateIR(koopa_raw_slice_t parent,
-                            std::vector<const void *> &inst_buf) const
+void *AddExpAST::GenerateIR() const
 {
 #ifdef DEBUG
     std::cout << "AddExp" << std::endl;
 #endif
     if (type == 1)
-        return mul_exp->GenerateIR(parent, inst_buf);
+        return mul_exp->GenerateIR();
     koopa_raw_value_data_t *ret = new koopa_raw_value_data();
-    koopa_raw_slice_t used_by = generate_slice(ret, KOOPA_RSIK_VALUE);
     ret->ty = generate_type(KOOPA_RTT_INT32);
     ret->name = nullptr;
-    ret->used_by = parent;
+    ret->used_by = generate_slice(KOOPA_RSIK_VALUE);
     ret->kind.tag = KOOPA_RVT_BINARY;
     auto &binary = ret->kind.data.binary;
     if (add_op == "+")
@@ -531,25 +520,23 @@ void *AddExpAST::GenerateIR(koopa_raw_slice_t parent,
     {
         binary.op = KOOPA_RBO_SUB;
     }
-    binary.lhs = (koopa_raw_value_t)add_exp->GenerateIR(used_by, inst_buf);
-    binary.rhs = (koopa_raw_value_t)mul_exp->GenerateIR(used_by, inst_buf);
-    inst_buf.push_back(ret);
+    binary.lhs = (koopa_raw_value_t)add_exp->GenerateIR();
+    binary.rhs = (koopa_raw_value_t)mul_exp->GenerateIR();
+    block_list.add_inst(ret);
     return ret;
 }
 
-void *MulExpAST::GenerateIR(koopa_raw_slice_t parent,
-                            std::vector<const void *> &inst_buf) const
+void *MulExpAST::GenerateIR() const
 {
 #ifdef DEBUG
     std::cout << "MulExp" << std::endl;
 #endif
     if (type == 1)
-        return unary_exp->GenerateIR(parent, inst_buf);
+        return unary_exp->GenerateIR();
     koopa_raw_value_data_t *ret = new koopa_raw_value_data();
-    koopa_raw_slice_t used_by = generate_slice(ret, KOOPA_RSIK_VALUE);
     ret->ty = generate_type(KOOPA_RTT_INT32);
     ret->name = nullptr;
-    ret->used_by = parent;
+    ret->used_by = generate_slice(KOOPA_RSIK_VALUE);
     ret->kind.tag = KOOPA_RVT_BINARY;
     auto &binary = ret->kind.data.binary;
     if (mul_op == "*")
@@ -564,55 +551,53 @@ void *MulExpAST::GenerateIR(koopa_raw_slice_t parent,
     {
         binary.op = KOOPA_RBO_MOD;
     }
-    binary.lhs = (koopa_raw_value_t)mul_exp->GenerateIR(used_by, inst_buf);
-    binary.rhs = (koopa_raw_value_t)unary_exp->GenerateIR(used_by, inst_buf);
-    inst_buf.push_back(ret);
+    binary.lhs = (koopa_raw_value_t)mul_exp->GenerateIR();
+    binary.rhs = (koopa_raw_value_t)unary_exp->GenerateIR();
+    block_list.add_inst(ret);
     return ret;
 }
 
-void *UnaryExpAST::GenerateIR(koopa_raw_slice_t parent,
-                              std::vector<const void *> &inst_buf) const
+void *UnaryExpAST::GenerateIR() const
 {
 #ifdef DEBUG
     std::cout << "UnaryExp" << std::endl;
 #endif
     if (type == 1)
-        return primary_exp->GenerateIR(parent, inst_buf);
+        return primary_exp->GenerateIR();
     if (unary_op == "+")
-        return unary_exp->GenerateIR(parent, inst_buf);
+        return unary_exp->GenerateIR();
 
     koopa_raw_value_data_t *ret = new koopa_raw_value_data();
-    koopa_raw_slice_t used_by = generate_slice(ret, KOOPA_RSIK_VALUE);
 
-    koopa_raw_value_data_t *zero = generate_number(used_by, 0);
+    koopa_raw_value_data_t *zero = generate_number(0);
 
     auto &binary = ret->kind.data.binary;
     binary.lhs = (koopa_raw_value_t)zero;
 
     ret->ty = generate_type(KOOPA_RTT_INT32);
     ret->name = nullptr;
-    ret->used_by = parent;
+    ret->used_by = generate_slice(KOOPA_RSIK_VALUE);
     ret->kind.tag = KOOPA_RVT_BINARY;
     if (unary_op == "-")
         binary.op = KOOPA_RBO_SUB;
     else if (unary_op == "!")
         binary.op = KOOPA_RBO_EQ;
-    binary.rhs = (koopa_raw_value_t)unary_exp->GenerateIR(parent, inst_buf);
-    inst_buf.push_back(ret);
+    binary.rhs = (koopa_raw_value_t)unary_exp->GenerateIR();
+    block_list.add_inst(ret);
     return ret;
 }
 
-void *PrimaryExpAST::GenerateIR(koopa_raw_slice_t parent,
-                                std::vector<const void *> &inst_buf) const
+void *PrimaryExpAST::GenerateIR() const
 {
 #ifdef DEBUG
     std::cout << "PrimaryExp" << std::endl;
 #endif
     if (type == 1)
-        return exp->GenerateIR(parent, inst_buf);
+        return exp->GenerateIR();
     else if (type == 2)
-        return lval->GenerateIR(parent, inst_buf);
-    return generate_number(parent, number);
+        return lval->GenerateIR();
+    else
+        return generate_number(number);
 }
 
 /*******************************************************************************************************************/
@@ -741,22 +726,19 @@ std::string LValAST::GetIdent() const
     return ident;
 }
 
-void *generate_bool(koopa_raw_slice_t parent,
-                    std::vector<const void *> &inst_buf,
-                    koopa_raw_value_t exp)
+void *generate_bool(koopa_raw_value_t exp)
 {
     koopa_raw_value_data_t *ret = new koopa_raw_value_data();
-    koopa_raw_slice_t used_by = generate_slice(ret, KOOPA_RSIK_VALUE);
     ret->ty = generate_type(KOOPA_RTT_INT32);
     ret->name = nullptr;
-    ret->used_by = parent;
+    ret->used_by = generate_slice(KOOPA_RSIK_VALUE);
     ret->kind.tag = KOOPA_RVT_BINARY;
     auto &binary = ret->kind.data.binary;
     binary.op = KOOPA_RBO_NOT_EQ;
     binary.lhs = exp;
-    koopa_raw_value_data *zero = generate_number(used_by, 0);
+    koopa_raw_value_data *zero = generate_number(0);
     binary.rhs = (koopa_raw_value_t)zero;
-    inst_buf.push_back(ret);
+    block_list.add_inst(ret);
     return ret;
 }
 
@@ -805,12 +787,12 @@ koopa_raw_type_t generate_type(koopa_raw_type_tag_t tag, koopa_raw_type_tag_t ba
     return (koopa_raw_type_t)ret;
 }
 
-koopa_raw_value_data_t *generate_number(koopa_raw_slice_t parent, int32_t number)
+koopa_raw_value_data_t *generate_number(int32_t number)
 {
     koopa_raw_value_data_t *ret = new koopa_raw_value_data();
     ret->ty = generate_type(KOOPA_RTT_INT32);
     ret->name = nullptr;
-    ret->used_by = parent;
+    ret->used_by = generate_slice(KOOPA_RSIK_VALUE);
     ret->kind.tag = KOOPA_RVT_INTEGER;
     ret->kind.data.integer.value = number;
     return ret;

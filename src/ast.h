@@ -97,6 +97,24 @@ private:
 };
 static SymbolTable symbol_table;
 
+/******************************************************************************************************************/
+/************************************************BlockList*****************************************************/
+/******************************************************************************************************************/
+
+class BlockList
+{
+private:
+    std::vector<const void *> *block_list;
+    std::vector<const void *> tmp_inst_buf;
+
+public:
+    void init(std::vector<const void *> *blocks);
+    void add_block(koopa_raw_basic_block_data_t *block);
+    void add_inst(const void *inst);
+    void finish_block();
+};
+static BlockList block_list;
+
 /********************************************************************************************************/
 /************************************************AST*****************************************************/
 /********************************************************************************************************/
@@ -109,9 +127,6 @@ public:
     virtual std::string GetIdent() const { return ""; };
     virtual std::int32_t CalculateValue() const { return 0; };
     virtual void *GenerateIR() const { return nullptr; };
-    virtual void *GenerateIR(std::vector<const void *> &inst_buf) const { return nullptr; };
-    virtual void *GenerateIR(koopa_raw_slice_t parent,
-                             std::vector<const void *> &inst_buf) const { return nullptr; };
 };
 
 // CompUnit  ::= FuncDef
@@ -154,7 +169,6 @@ public:
 
     void Dump() const override;
     void *GenerateIR() const override;
-    void *GenerateIR(std::vector<const void *> &inst_buf) const override;
 };
 
 // BlockItem   ::= Decl | Stmt;
@@ -166,7 +180,7 @@ public:
     std::unique_ptr<BaseAST> stmt;
 
     void Dump() const override;
-    void *GenerateIR(std::vector<const void *> &inst_buf) const override;
+    void *GenerateIR() const override;
 };
 
 // Decl          ::= ConstDecl | VarDecl;
@@ -178,7 +192,7 @@ public:
     std::unique_ptr<BaseAST> var_decl;
 
     void Dump() const override;
-    void *GenerateIR(std::vector<const void *> &inst_buf) const override;
+    void *GenerateIR() const override;
 };
 
 // ConstDecl     ::= "const" BType ConstDef {"," ConstDef} ";";
@@ -189,7 +203,7 @@ public:
     std::unique_ptr<std::vector<std::unique_ptr<BaseAST>>> const_def_list;
 
     void Dump() const override;
-    void *GenerateIR(std::vector<const void *> &inst_buf) const override;
+    void *GenerateIR() const override;
 };
 
 // BType         ::= "int";
@@ -231,8 +245,7 @@ public:
     std::unique_ptr<BaseAST> exp;
 
     void Dump() const override;
-    void *GenerateIR(koopa_raw_slice_t parent,
-                     std::vector<const void *> &inst_buf) const override;
+    void *GenerateIR() const override;
     std::int32_t CalculateValue() const override;
 };
 
@@ -244,7 +257,7 @@ public:
     std::unique_ptr<std::vector<std::unique_ptr<BaseAST>>> var_def_list;
 
     void Dump() const override;
-    void *GenerateIR(std::vector<const void *> &inst_buf) const override;
+    void *GenerateIR() const override;
 };
 
 // VarDef        ::= IDENT | IDENT "=" InitVal;
@@ -256,7 +269,7 @@ public:
     std::unique_ptr<BaseAST> init_val;
 
     void Dump() const override;
-    void *GenerateIR(std::vector<const void *> &inst_buf) const override;
+    void *GenerateIR() const override;
 };
 
 // InitVal       ::= Exp;
@@ -266,8 +279,7 @@ public:
     std::unique_ptr<BaseAST> exp;
 
     void Dump() const override;
-    void *GenerateIR(koopa_raw_slice_t parent,
-                     std::vector<const void *> &inst_buf) const override;
+    void *GenerateIR() const override;
 };
 
 // Stmt          :: = LVal "=" Exp ";"
@@ -277,13 +289,20 @@ public:
 class StmtAST : public BaseAST
 {
 public:
-    std::int32_t type;
+    enum
+    {
+        IF_ELSE,
+        ASSIGN,
+        EXP,
+        BLOCK,
+        RETURN
+    } type;
     std::unique_ptr<BaseAST> lval;
     std::unique_ptr<BaseAST> exp;
     std::unique_ptr<BaseAST> block;
 
     void Dump() const override;
-    void *GenerateIR(std::vector<const void *> &inst_buf) const override;
+    void *GenerateIR() const override;
 };
 
 // LVal        ::= IDENT;
@@ -294,8 +313,7 @@ public:
 
     void Dump() const override;
     std::string GetIdent() const override;
-    void *GenerateIR(koopa_raw_slice_t parent,
-                     std::vector<const void *> &inst_buf) const override;
+    void *GenerateIR() const override;
     std::int32_t CalculateValue() const override;
 };
 
@@ -306,8 +324,7 @@ public:
     std::unique_ptr<BaseAST> lor_exp;
 
     void Dump() const override;
-    void *GenerateIR(koopa_raw_slice_t parent,
-                     std::vector<const void *> &inst_buf) const override;
+    void *GenerateIR() const override;
     std::int32_t CalculateValue() const override;
 };
 
@@ -320,8 +337,7 @@ public:
     std::unique_ptr<BaseAST> land_exp;
 
     void Dump() const override;
-    void *GenerateIR(koopa_raw_slice_t parent,
-                     std::vector<const void *> &inst_buf) const override;
+    void *GenerateIR() const override;
     std::int32_t CalculateValue() const override;
 };
 
@@ -334,8 +350,7 @@ public:
     std::unique_ptr<BaseAST> eq_exp;
 
     void Dump() const override;
-    void *GenerateIR(koopa_raw_slice_t parent,
-                     std::vector<const void *> &inst_buf) const override;
+    void *GenerateIR() const override;
     std::int32_t CalculateValue() const override;
 };
 
@@ -350,8 +365,7 @@ public:
     std::unique_ptr<BaseAST> rel_exp;
 
     void Dump() const override;
-    void *GenerateIR(koopa_raw_slice_t parent,
-                     std::vector<const void *> &inst_buf) const override;
+    void *GenerateIR() const override;
     std::int32_t CalculateValue() const override;
 };
 
@@ -366,8 +380,7 @@ public:
     std::unique_ptr<BaseAST> add_exp;
 
     void Dump() const override;
-    void *GenerateIR(koopa_raw_slice_t parent,
-                     std::vector<const void *> &inst_buf) const override;
+    void *GenerateIR() const override;
     std::int32_t CalculateValue() const override;
 };
 
@@ -382,8 +395,7 @@ public:
     std::unique_ptr<BaseAST> mul_exp;
 
     void Dump() const override;
-    void *GenerateIR(koopa_raw_slice_t parent,
-                     std::vector<const void *> &inst_buf) const override;
+    void *GenerateIR() const override;
     std::int32_t CalculateValue() const override;
 };
 
@@ -398,8 +410,7 @@ public:
     std::unique_ptr<BaseAST> unary_exp;
 
     void Dump() const override;
-    void *GenerateIR(koopa_raw_slice_t parent,
-                     std::vector<const void *> &inst_buf) const override;
+    void *GenerateIR() const override;
     std::int32_t CalculateValue() const override;
 };
 
@@ -414,8 +425,7 @@ public:
     std::unique_ptr<BaseAST> unary_exp;
 
     void Dump() const override;
-    void *GenerateIR(koopa_raw_slice_t parent,
-                     std::vector<const void *> &inst_buf) const override;
+    void *GenerateIR() const override;
     std::int32_t CalculateValue() const override;
 };
 
@@ -429,8 +439,7 @@ public:
     std::int32_t number;
 
     void Dump() const override;
-    void *GenerateIR(koopa_raw_slice_t parent,
-                     std::vector<const void *> &inst_buf) const override;
+    void *GenerateIR() const override;
     std::int32_t CalculateValue() const override;
 };
 
@@ -440,8 +449,7 @@ public:
 /************************************************Utils*****************************************************/
 /**********************************************************************************************************/
 
-void *generate_bool(koopa_raw_slice_t parent, std::vector<const void *> &inst_buf,
-                    koopa_raw_value_t exp);
+void *generate_bool(koopa_raw_value_t exp);
 koopa_raw_slice_t generate_slice(koopa_raw_slice_item_kind_t kind = KOOPA_RSIK_UNKNOWN);
 koopa_raw_slice_t generate_slice(std::vector<const void *> &vec,
                                  koopa_raw_slice_item_kind_t kind = KOOPA_RSIK_UNKNOWN);
@@ -449,4 +457,4 @@ koopa_raw_slice_t generate_slice(const void *data,
                                  koopa_raw_slice_item_kind_t kind = KOOPA_RSIK_UNKNOWN);
 koopa_raw_type_t generate_type(koopa_raw_type_tag_t tag);
 koopa_raw_type_t generate_type(koopa_raw_type_tag_t tag, koopa_raw_type_tag_t base);
-koopa_raw_value_data *generate_number(koopa_raw_slice_t parent, int32_t number);
+koopa_raw_value_data *generate_number(int32_t number);
