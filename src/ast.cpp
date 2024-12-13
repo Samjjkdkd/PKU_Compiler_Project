@@ -361,6 +361,52 @@ void *StmtAST::GenerateIR() const
                 (koopa_raw_value_t)exp->GenerateIR();
         block_list.add_inst(ret);
     }
+    else if (type == StmtAST::IF_ELSE)
+    {
+        ret = (koopa_raw_value_data_t *)if_exp->GenerateIR();
+        koopa_raw_basic_block_data_t *false_block = generate_block("%false");
+        ret->kind.data.branch.false_bb = false_block;
+        ret->kind.data.branch.false_args = generate_slice(KOOPA_RSIK_VALUE);
+        if (else_stmt != nullptr)
+        {
+            koopa_raw_basic_block_data_t *end_block = generate_block("%end");
+            block_list.add_inst(generate_jump_inst(end_block));
+            block_list.finish_block();
+            block_list.add_block(false_block);
+            else_stmt->GenerateIR();
+            block_list.add_inst(generate_jump_inst(end_block));
+            block_list.finish_block();
+            block_list.add_block(end_block);
+        }
+        else
+        {
+            block_list.add_inst(generate_jump_inst(false_block));
+            block_list.finish_block();
+            block_list.add_block(false_block);
+        }
+    }
+    return ret;
+}
+
+void *IfExpAST::GenerateIR() const
+{
+#ifdef DEBUG
+    std::cout << "IfExp" << std::endl;
+#endif
+    koopa_raw_value_data_t *ret = new koopa_raw_value_data();
+    ret->ty = generate_type(KOOPA_RTT_INT32);
+    ret->name = nullptr;
+    ret->used_by = generate_slice(KOOPA_RSIK_VALUE);
+    ret->kind.tag = KOOPA_RVT_BRANCH;
+    auto &branch = ret->kind.data.branch;
+    branch.cond = (koopa_raw_value_t)exp->GenerateIR();
+    koopa_raw_basic_block_data_t *true_block = generate_block("%true");
+    branch.true_bb = true_block;
+    branch.true_args = generate_slice(KOOPA_RSIK_VALUE);
+    block_list.add_inst(ret);
+    block_list.finish_block();
+    block_list.add_block(true_block);
+    stmt->GenerateIR();
     return ret;
 }
 
@@ -798,6 +844,27 @@ koopa_raw_value_data_t *generate_number(int32_t number)
     return ret;
 }
 
+koopa_raw_basic_block_data_t *generate_block(const char *name)
+{
+    koopa_raw_basic_block_data_t *ret = new koopa_raw_basic_block_data_t();
+    ret->name = name;
+    ret->params = generate_slice(KOOPA_RSIK_VALUE);
+    ret->used_by = generate_slice(KOOPA_RSIK_VALUE);
+    return ret;
+}
+
+koopa_raw_value_data_t *generate_jump_inst(koopa_raw_basic_block_data_t *dest)
+{
+    koopa_raw_value_data_t *ret = new koopa_raw_value_data();
+    ret->ty = generate_type(KOOPA_RTT_UNIT);
+    ret->name = nullptr;
+    ret->used_by = generate_slice(KOOPA_RSIK_VALUE);
+    ret->kind.tag = KOOPA_RVT_JUMP;
+    ret->kind.data.jump.args = generate_slice(KOOPA_RSIK_VALUE);
+    ret->kind.data.jump.target = dest;
+    return ret;
+}
+
 /*********************************************************************************************************/
 /************************************************Dump*****************************************************/
 /*********************************************************************************************************/
@@ -857,7 +924,8 @@ void BlockItemAST::Dump() const
 
 void DeclAST::Dump() const
 {
-    std::cout << "Decl{";
+    std::cout << std::endl
+              << "Decl{";
     if (type == 1)
         const_decl->Dump();
     else
@@ -944,31 +1012,52 @@ void InitValAST::Dump() const
 
 void StmtAST::Dump() const
 {
-    std::cout << "Stmt{";
-    if (type == 1)
+    std::cout << std::endl
+              << "Stmt{";
+    if (type == StmtAST::ASSIGN)
     {
         lval->Dump();
         std::cout << "=";
         exp->Dump();
         std::cout << ";";
     }
-    else if (type == 2)
+    else if (type == StmtAST::EXP)
     {
         if (exp != nullptr)
             exp->Dump();
         std::cout << ";";
     }
-    else if (type == 3)
+    else if (type == StmtAST::BLOCK)
     {
         block->Dump();
     }
-    else
+    else if (type == StmtAST::RETURN)
     {
         std::cout << "return";
         if (exp != nullptr)
             exp->Dump();
         std::cout << ";";
     }
+    else if (type == StmtAST::IF_ELSE)
+    {
+        if_exp->Dump();
+        if (else_stmt != nullptr)
+        {
+            std::cout << std::endl
+                      << "else";
+            else_stmt->Dump();
+        }
+    }
+    std::cout << "}";
+}
+
+void IfExpAST::Dump() const
+{
+    std::cout << "IfExp{";
+    std::cout << "if(";
+    exp->Dump();
+    std::cout << ")";
+    stmt->Dump();
     std::cout << "}";
 }
 

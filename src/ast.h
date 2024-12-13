@@ -10,7 +10,7 @@
 #include "koopa.h"
 
 // #define DEBUG
-//  CompUnit      ::= FuncDef;
+// CompUnit      ::= FuncDef;
 
 // FuncDef       ::= FuncType IDENT "(" ")" Block;
 
@@ -34,7 +34,10 @@
 // Stmt          :: = LVal "=" Exp ";"
 //                    | [Exp] ";"
 //                    | Block
+//                    | IfExp ["else" Stmt]
 //                    | "return" [Exp] ";";
+
+// IfExp         ::= "if" "(" Exp ")" Stmt;
 
 // LVal        ::= IDENT;
 
@@ -285,6 +288,7 @@ public:
 // Stmt          :: = LVal "=" Exp ";"
 //                    | [Exp] ";"
 //                    | Block
+//                    | "if" "(" Exp ")" Stmt ["else" Stmt]
 //                    | "return"[Exp] ";";
 class StmtAST : public BaseAST
 {
@@ -300,6 +304,18 @@ public:
     std::unique_ptr<BaseAST> lval;
     std::unique_ptr<BaseAST> exp;
     std::unique_ptr<BaseAST> block;
+    std::unique_ptr<BaseAST> if_exp;
+    std::unique_ptr<BaseAST> else_stmt;
+
+    void Dump() const override;
+    void *GenerateIR() const override;
+};
+
+class IfExpAST : public BaseAST
+{
+public:
+    std::unique_ptr<BaseAST> exp;
+    std::unique_ptr<BaseAST> stmt;
 
     void Dump() const override;
     void *GenerateIR() const override;
@@ -458,3 +474,5 @@ koopa_raw_slice_t generate_slice(const void *data,
 koopa_raw_type_t generate_type(koopa_raw_type_tag_t tag);
 koopa_raw_type_t generate_type(koopa_raw_type_tag_t tag, koopa_raw_type_tag_t base);
 koopa_raw_value_data *generate_number(int32_t number);
+koopa_raw_basic_block_data_t *generate_block(const char *name);
+koopa_raw_value_data_t *generate_jump_inst(koopa_raw_basic_block_data_t *target);
