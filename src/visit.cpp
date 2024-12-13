@@ -114,6 +114,7 @@ void Visit(const koopa_raw_basic_block_t &bb)
     // 执行一些其他的必要操作
     // ...
     // 访问所有指令
+    std::cout << bb->name + 1 << ":" << std::endl;
     Visit(bb->insts);
 }
 
@@ -149,8 +150,15 @@ void Visit(const koopa_raw_value_t &value)
         // 访问 store 指令
         Visit(kind.data.store);
         break;
+    case KOOPA_RVT_BRANCH:
+        Visit(kind.data.branch);
+        break;
+    case KOOPA_RVT_JUMP:
+        Visit(kind.data.jump);
+        break;
     default:
         // 其他类型暂时遇不到
+        std::cout << kind.tag << std::endl;
         assert(false);
     }
 }
@@ -269,6 +277,19 @@ void Visit(const koopa_raw_store_t &value)
 
     // 将结果存回
     std::cout << "  sw t0, " << stack.get_loc(value.dest) << "(sp)" << std::endl;
+}
+
+// 访问 branch 指令
+void Visit(const koopa_raw_branch_t &branch)
+{
+    load_reg(branch.cond, "t0");
+    std::cout << "  bnez t0, " << branch.true_bb->name + 1 << std::endl;
+    std::cout << "  j " << branch.false_bb->name + 1 << std::endl;
+}
+
+void Visit(const koopa_raw_jump_t &jump)
+{
+    std::cout << "  j " << jump.target->name + 1 << std::endl;
 }
 /**********************************************************************************************************/
 /************************************************Utils*****************************************************/

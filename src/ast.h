@@ -114,7 +114,7 @@ public:
     void init(std::vector<const void *> *blocks);
     void add_block(koopa_raw_basic_block_data_t *block);
     void add_inst(const void *inst);
-    void finish_block();
+    void push_tmp_inst();
 };
 static BlockList block_list;
 
@@ -465,7 +465,6 @@ public:
 /************************************************Utils*****************************************************/
 /**********************************************************************************************************/
 
-void *generate_bool(koopa_raw_value_t exp);
 koopa_raw_slice_t generate_slice(koopa_raw_slice_item_kind_t kind = KOOPA_RSIK_UNKNOWN);
 koopa_raw_slice_t generate_slice(std::vector<const void *> &vec,
                                  koopa_raw_slice_item_kind_t kind = KOOPA_RSIK_UNKNOWN);
@@ -474,5 +473,12 @@ koopa_raw_slice_t generate_slice(const void *data,
 koopa_raw_type_t generate_type(koopa_raw_type_tag_t tag);
 koopa_raw_type_t generate_type(koopa_raw_type_tag_t tag, koopa_raw_type_tag_t base);
 koopa_raw_value_data *generate_number(int32_t number);
+koopa_raw_function_data_t *generate_function(std::string ident, const struct koopa_raw_type_kind *func_type);
 koopa_raw_basic_block_data_t *generate_block(const char *name);
+koopa_raw_value_data_t *generate_alloc_inst(std::string ident);
+koopa_raw_value_data_t *generate_store_inst(koopa_raw_value_t dest, koopa_raw_value_t value);
+koopa_raw_value_data_t *generate_load_inst(koopa_raw_value_t src);
+koopa_raw_value_data_t *generate_binary_inst(koopa_raw_value_t lhs, koopa_raw_value_t rhs, koopa_raw_binary_op_t op);
+koopa_raw_value_data_t *generate_return_inst(koopa_raw_value_t value);
 koopa_raw_value_data_t *generate_jump_inst(koopa_raw_basic_block_data_t *target);
+koopa_raw_value_data_t *generate_branch_inst(koopa_raw_value_t cond, koopa_raw_basic_block_data_t *true_bb, koopa_raw_basic_block_data_t *false_bb);
