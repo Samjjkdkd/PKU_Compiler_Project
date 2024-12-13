@@ -420,13 +420,13 @@ void *LOrExpAST::GenerateIR() const
     block_list.add_inst(store_1);
 
     koopa_raw_value_data_t *branch =
-        generate_branch_inst((koopa_raw_value_t)land_exp->GenerateIR(), generate_block("%end"), generate_block("%true"));
+        generate_branch_inst((koopa_raw_value_t)lor_exp->GenerateIR(), generate_block("%end"), generate_block("%true"));
     block_list.add_inst(branch);
 
     block_list.push_tmp_inst();
     block_list.add_block((koopa_raw_basic_block_data_t *)branch->kind.data.branch.false_bb);
     koopa_raw_value_data_t *true_exp =
-        generate_binary_inst((koopa_raw_value_t)lor_exp->GenerateIR(), (koopa_raw_value_t)generate_number(0), KOOPA_RBO_NOT_EQ);
+        generate_binary_inst((koopa_raw_value_t)land_exp->GenerateIR(), (koopa_raw_value_t)generate_number(0), KOOPA_RBO_NOT_EQ);
     block_list.add_inst(true_exp);
 
     koopa_raw_value_data_t *store_rhs =
@@ -460,13 +460,13 @@ void *LAndExpAST::GenerateIR() const
     block_list.add_inst(store_0);
 
     koopa_raw_value_data_t *branch =
-        generate_branch_inst((koopa_raw_value_t)eq_exp->GenerateIR(), generate_block("%true"), generate_block("%end"));
+        generate_branch_inst((koopa_raw_value_t)land_exp->GenerateIR(), generate_block("%true"), generate_block("%end"));
     block_list.add_inst(branch);
 
     block_list.push_tmp_inst();
     block_list.add_block((koopa_raw_basic_block_data_t *)branch->kind.data.branch.true_bb);
     koopa_raw_value_data_t *true_exp =
-        generate_binary_inst((koopa_raw_value_t)land_exp->GenerateIR(), (koopa_raw_value_t)generate_number(0), KOOPA_RBO_NOT_EQ);
+        generate_binary_inst((koopa_raw_value_t)eq_exp->GenerateIR(), (koopa_raw_value_t)generate_number(0), KOOPA_RBO_NOT_EQ);
     block_list.add_inst(true_exp);
 
     koopa_raw_value_data_t *store_rhs =
