@@ -98,7 +98,7 @@ void Visit(const koopa_raw_function_t &func)
     // addi 指令中立即数的范围是 -2048 到 2047
     if (stack.len != 0)
     {
-        deal_offset_exceed(stack.len, "addi-", "sp");
+        deal_offset_exceed(stack.len, "addi-", "t0");
     }
     // 访问所有基本块
     Visit(func->bbs);
@@ -167,7 +167,7 @@ void Visit(const koopa_raw_return_t &value)
     // 恢复栈帧
     if (stack.len != 0)
     {
-        deal_offset_exceed(stack.len, "addi+", "sp");
+        deal_offset_exceed(stack.len, "addi+", "t0");
     }
     std::cout << "  ret" << std::endl;
 }
@@ -311,7 +311,6 @@ void load_reg(const koopa_raw_value_t &value, std::string reg)
 
 void deal_offset_exceed(int offset, std::string inst, std::string reg)
 {
-
     if (inst == "lw" || inst == "sw")
     {
         if (offset < -2048 || offset > 2047)
