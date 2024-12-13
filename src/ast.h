@@ -115,6 +115,7 @@ public:
     void add_block(koopa_raw_basic_block_data_t *block);
     void add_inst(const void *inst);
     void push_tmp_inst();
+    bool check_return();
 };
 static BlockList block_list;
 

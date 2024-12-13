@@ -131,6 +131,23 @@ void BlockList::push_tmp_inst()
     return;
 }
 
+bool BlockList::check_return()
+{
+    // if there is no return, return true
+    if (block_list->size() == 0 || tmp_inst_buf.size() == 0)
+    {
+        return true;
+    }
+    for (unsigned i = 0; i < tmp_inst_buf.size(); i++)
+    {
+        koopa_raw_value_t inst = (koopa_raw_value_t)tmp_inst_buf[i];
+        if (inst->kind.tag == KOOPA_RVT_RETURN)
+        {
+            return false;
+        }
+    }
+    return true;
+}
 /***************************************************************************************************************/
 /************************************************GenerateIR*****************************************************/
 /***************************************************************************************************************/
@@ -338,20 +355,34 @@ void *StmtAST::GenerateIR() const
         ret = (koopa_raw_value_data_t *)if_exp->GenerateIR();
         koopa_raw_basic_block_data_t *false_block =
             (koopa_raw_basic_block_data_t *)ret->kind.data.branch.false_bb;
+        bool true_block_no_return = block_list.check_return();
         if (else_stmt != nullptr)
         {
             koopa_raw_basic_block_data_t *end_block = generate_block("%end");
-            block_list.add_inst(generate_jump_inst(end_block));
+            if (true_block_no_return)
+            {
+                block_list.add_inst(generate_jump_inst(end_block));
+            }
             block_list.push_tmp_inst();
             block_list.add_block(false_block);
             else_stmt->GenerateIR();
-            block_list.add_inst(generate_jump_inst(end_block));
-            block_list.push_tmp_inst();
-            block_list.add_block(end_block);
+            bool false_block_no_return = block_list.check_return();
+            if (false_block_no_return)
+            {
+                block_list.add_inst(generate_jump_inst(end_block));
+            }
+            if (true_block_no_return || false_block_no_return)
+            {
+                block_list.push_tmp_inst();
+                block_list.add_block(end_block);
+            }
         }
         else
         {
-            block_list.add_inst(generate_jump_inst(false_block));
+            if (true_block_no_return)
+            {
+                block_list.add_inst(generate_jump_inst(false_block));
+            }
             block_list.push_tmp_inst();
             block_list.add_block(false_block);
         }
