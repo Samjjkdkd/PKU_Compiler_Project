@@ -38,7 +38,7 @@ SymbolTable::Value SymbolTable::get_value(std::string name)
             return value->second;
         }
     }
-    std::cout << "Error: " << name << " not found" << std::endl;
+    // std::cout << "Error: " << name << " not found" << std::endl;
     assert(0);
 }
 
@@ -118,7 +118,7 @@ void BlockList::push_tmp_inst()
     for (unsigned i = 0; i < tmp_inst_buf.size(); i++)
     {
         koopa_raw_value_t inst = (koopa_raw_value_t)tmp_inst_buf[i];
-        if (inst->kind.tag == KOOPA_RVT_RETURN || inst->kind.tag == KOOPA_RVT_BRANCH || inst->kind.tag == KOOPA_RVT_JUMP)
+        if (inst->kind.tag == KOOPA_RVT_RETURN)
         {
             tmp_inst_buf.erase(tmp_inst_buf.begin() + i + 1, tmp_inst_buf.end());
             break;

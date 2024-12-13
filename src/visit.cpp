@@ -98,11 +98,7 @@ void Visit(const koopa_raw_function_t &func)
     // addi 指令中立即数的范围是 -2048 到 2047
     if (stack.len != 0)
     {
-        if (stack.len < 2048)
-            std::cout << "  addi sp, sp, -" << stack.len << std::endl;
-        else
-            std::cout << "  li t0, " << stack.len << std::endl
-                      << "  sub sp, sp, t0" << std::endl;
+        deal_offset_exceed(stack.len, "addi-", "sp");
     }
     // 访问所有基本块
     Visit(func->bbs);
@@ -171,11 +167,7 @@ void Visit(const koopa_raw_return_t &value)
     // 恢复栈帧
     if (stack.len != 0)
     {
-        if (stack.len < 2048)
-            std::cout << "  addi sp, sp, " << stack.len << std::endl;
-        else
-            std::cout << "  li t0, " << stack.len << std::endl
-                      << "  add sp, sp, t0" << std::endl;
+        deal_offset_exceed(stack.len, "addi+", "sp");
     }
     std::cout << "  ret" << std::endl;
 }
@@ -256,7 +248,8 @@ void Visit(const koopa_raw_binary_t &binary, const koopa_raw_value_t &value)
     // 将结果存回
     stack.alloc_value(value, stack.pos);
     stack.pos += 4;
-    std::cout << "  sw t0, " << stack.get_loc(value) << "(sp)" << std::endl;
+    int offset = stack.get_loc(value);
+    deal_offset_exceed(offset, "sw", "t0");
 }
 
 // 访问 load 指令
@@ -267,7 +260,8 @@ void Visit(const koopa_raw_load_t &load, const koopa_raw_value_t &value)
     // 将结果存回
     stack.alloc_value(value, stack.pos);
     stack.pos += 4;
-    std::cout << "  sw t0, " << stack.get_loc(value) << "(sp)" << std::endl;
+    int offset = stack.get_loc(value);
+    deal_offset_exceed(offset, "sw", "t0");
 }
 
 // 访问 store 指令
@@ -276,7 +270,8 @@ void Visit(const koopa_raw_store_t &value)
     load_reg(value.value, "t0");
 
     // 将结果存回
-    std::cout << "  sw t0, " << stack.get_loc(value.dest) << "(sp)" << std::endl;
+    int offset = stack.get_loc(value.dest);
+    deal_offset_exceed(offset, "sw", "t0");
 }
 
 // 访问 branch 指令
@@ -297,6 +292,7 @@ void Visit(const koopa_raw_jump_t &jump)
 
 void load_reg(const koopa_raw_value_t &value, std::string reg)
 {
+    int offset = 0;
     switch (value->kind.tag)
     {
     case KOOPA_RVT_INTEGER:
@@ -305,9 +301,63 @@ void load_reg(const koopa_raw_value_t &value, std::string reg)
     case KOOPA_RVT_ALLOC:
     case KOOPA_RVT_LOAD:
     case KOOPA_RVT_BINARY:
-        std::cout << "  lw " << reg << ", " << stack.get_loc(value) << "(sp)" << std::endl;
+        offset = stack.get_loc(value);
+        deal_offset_exceed(offset, "lw", reg);
         break;
     default:
         break;
+    }
+}
+
+void deal_offset_exceed(int offset, std::string inst, std::string reg)
+{
+
+    if (inst == "lw" || inst == "sw")
+    {
+        if (offset < -2048 || offset > 2047)
+        {
+            // 偏移量超出范围，逐步调整基址寄存器
+            int new_base_offset = offset & ~0x7FF;
+            int remaining_offset = offset & 0x7FF;
+
+            if (new_base_offset < -2048 || new_base_offset > 2047)
+            {
+                std::cout << "  li t1, " << new_base_offset << std::endl;
+                std::cout << "  add t1, sp, t1" << std::endl;
+            }
+            else
+            {
+                std::cout << "  addi t1, sp, " << new_base_offset << std::endl;
+            }
+            std::cout << "  " << inst << " " << reg << ", " << remaining_offset << "(t1)" << std::endl;
+        }
+        else
+        {
+            std::cout << "  " << inst << " " << reg << ", " << offset << "(sp)" << std::endl;
+        }
+    }
+    else if (inst == "addi-")
+    {
+        if (offset < -2048 || offset > 2047)
+        {
+            std::cout << "  li " << reg << ", " << offset << std::endl;
+            std::cout << "  sub sp, sp, " << reg << std::endl;
+        }
+        else
+        {
+            std::cout << "  addi sp, sp, -" << offset << std::endl;
+        }
+    }
+    else if (inst == "addi+")
+    {
+        if (offset < -2048 || offset > 2047)
+        {
+            std::cout << "  li " << reg << ", " << offset << std::endl;
+            std::cout << "  add sp, sp, " << reg << std::endl;
+        }
+        else
+        {
+            std::cout << "  addi sp, sp, " << offset << std::endl;
+        }
     }
 }

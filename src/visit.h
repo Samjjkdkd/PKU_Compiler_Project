@@ -78,3 +78,6 @@ void Visit(const koopa_raw_jump_t &jump);
 
 // 将 value 加载到 reg 中
 void load_reg(const koopa_raw_value_t &value, std::string reg);
+
+// 处理偏移量超出范围
+void deal_offset_exceed(int offset, std::string inst, std::string reg);
