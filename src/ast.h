@@ -10,7 +10,7 @@
 #include "koopa.h"
 
 // #define DEBUG
-// CompUnit      ::= FuncDef;
+//  CompUnit      ::= FuncDef;
 
 // FuncDef       ::= FuncType IDENT "(" ")" Block;
 

@@ -76,6 +76,9 @@ void SymbolTable::del_table()
 
 std::vector<const void *> BlockList::get_block_list()
 {
+#ifdef DEBUG
+    std::cout << "BlockList::get_block_list" << std::endl;
+#endif
     return block_list;
 }
 
@@ -131,6 +134,9 @@ void BlockList::push_tmp_inst()
 
 bool BlockList::check_return()
 {
+#ifdef DEBUG
+    std::cout << "BlockList::check_return" << std::endl;
+#endif
     // if there is no return, return true
     if (block_list.size() == 0 || tmp_inst_buf.size() == 0)
     {
@@ -149,6 +155,9 @@ bool BlockList::check_return()
 
 void BlockList::rearrange_block_list()
 {
+#ifdef DEBUG
+    std::cout << "BlockList::rearrange_block_list" << std::endl;
+#endif
     std::unordered_map<koopa_raw_basic_block_t, bool> is_visited;
     if (block_list.size() == 0)
         return;
@@ -225,6 +234,9 @@ void LoopStack::del_loop()
 
 bool LoopStack::is_inside_loop()
 {
+#ifdef DEBUG
+    std::cout << "LoopStack::is_inside_loop" << std::endl;
+#endif
     return loop_stack.size() > 0;
 }
 
@@ -255,6 +267,10 @@ void *FuncDefAST::GenerateIR() const
     koopa_raw_basic_block_data_t *entry = generate_block("%entry");
     block_list.add_block(entry);
     block->GenerateIR();
+    // if there is no return, add a return 0
+    koopa_raw_value_data_t *ret_inst = generate_return_inst(generate_number(0));
+    block_list.add_inst(ret_inst);
+    // if there already has a return, push_tmp_inst will erase the return 0
     block_list.push_tmp_inst();
     block_list.rearrange_block_list();
     std::vector<const void *> blocks = block_list.get_block_list();
