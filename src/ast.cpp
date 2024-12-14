@@ -74,13 +74,9 @@ void SymbolTable::del_table()
 /************************************************BlockList*****************************************************/
 /**************************************************************************************************************/
 
-void BlockList::init(std::vector<const void *> *blocks)
+std::vector<const void *> BlockList::get_block_list()
 {
-#ifdef DEBUG
-    std::cout << "BlockList::init" << std::endl;
-#endif
-    this->block_list = blocks;
-    tmp_inst_buf.clear();
+    return block_list;
 }
 
 void BlockList::add_block(koopa_raw_basic_block_data_t *block)
@@ -90,7 +86,7 @@ void BlockList::add_block(koopa_raw_basic_block_data_t *block)
 #endif
     block->insts.buffer = nullptr;
     block->insts.len = 0;
-    block_list->push_back(block);
+    block_list.push_back(block);
 }
 
 void BlockList::add_inst(const void *inst)
@@ -103,16 +99,18 @@ void BlockList::add_inst(const void *inst)
 
 void BlockList::push_tmp_inst()
 {
+    // 这里是在保证每个block的最后一条指令是return或者branch或者jump
+    // 其实这个判断可以放到rearrange_block_list里面。但是这里还是加上了
 #ifdef DEBUG
     std::cout << "BlockList::push_tmp_inst" << std::endl;
 #endif
-    if (block_list->size() == 0)
+    if (block_list.size() == 0)
     {
         return;
     }
     if (tmp_inst_buf.size() == 0)
     {
-        block_list->pop_back();
+        block_list.pop_back();
         return;
     }
     for (unsigned i = 0; i < tmp_inst_buf.size(); i++)
@@ -124,7 +122,7 @@ void BlockList::push_tmp_inst()
             break;
         }
     }
-    koopa_raw_basic_block_data_t *last = (koopa_raw_basic_block_data_t *)block_list->back();
+    koopa_raw_basic_block_data_t *last = (koopa_raw_basic_block_data_t *)block_list.back();
     assert(last->insts.buffer == nullptr);
     last->insts = generate_slice(tmp_inst_buf, KOOPA_RSIK_VALUE);
     tmp_inst_buf.clear();
@@ -134,7 +132,7 @@ void BlockList::push_tmp_inst()
 bool BlockList::check_return()
 {
     // if there is no return, return true
-    if (block_list->size() == 0 || tmp_inst_buf.size() == 0)
+    if (block_list.size() == 0 || tmp_inst_buf.size() == 0)
     {
         return true;
     }
@@ -151,7 +149,43 @@ bool BlockList::check_return()
 
 void BlockList::rearrange_block_list()
 {
+    std::unordered_map<koopa_raw_basic_block_t, bool> is_visited;
+    if (block_list.size() == 0)
+        return;
+    is_visited[(koopa_raw_basic_block_data_t *)block_list[0]] = true;
+    for (size_t i = 1; i < block_list.size(); i++)
+    {
+        auto block = (koopa_raw_basic_block_data_t *)block_list[i];
+        is_visited[block] = false;
+    }
+    for (size_t i = 0; i < block_list.size(); i++)
+    {
+        auto block = (koopa_raw_basic_block_data_t *)block_list[i];
+        for (size_t j = 0; j < block->insts.len; j++)
+        {
+            auto inst = (koopa_raw_value_t)block->insts.buffer[j];
+            if (inst->kind.tag == KOOPA_RVT_JUMP)
+            {
+                is_visited[inst->kind.data.jump.target] = true;
+            }
+            else if (inst->kind.tag == KOOPA_RVT_BRANCH)
+            {
+                is_visited[inst->kind.data.branch.true_bb] = true;
+                is_visited[inst->kind.data.branch.false_bb] = true;
+            }
+        }
+    }
+    for (size_t i = 0; i < block_list.size(); i++)
+    {
+        auto block = (koopa_raw_basic_block_data_t *)block_list[i];
+        if (!is_visited[block])
+        {
+            block_list.erase(block_list.begin() + i);
+            i--;
+        }
+    }
 }
+
 /******************************************************************************************************************/
 /************************************************LoopStack*********************************************************/
 /******************************************************************************************************************/
@@ -218,12 +252,12 @@ void *FuncDefAST::GenerateIR() const
     const struct koopa_raw_type_kind *func_ty = (const struct koopa_raw_type_kind *)func_type->GenerateIR();
     koopa_raw_function_data_t *ret = generate_function(ident, func_ty);
 
-    std::vector<const void *> blocks;
-    block_list.init(&blocks);
     koopa_raw_basic_block_data_t *entry = generate_block("%entry");
     block_list.add_block(entry);
     block->GenerateIR();
     block_list.push_tmp_inst();
+    block_list.rearrange_block_list();
+    std::vector<const void *> blocks = block_list.get_block_list();
     ret->bbs = generate_slice(blocks, KOOPA_RSIK_BASIC_BLOCK);
 
     return ret;
@@ -409,6 +443,8 @@ void *StmtAST::GenerateIR() const
     }
     else if (type == StmtAST::IF_ELSE)
     {
+        // check_return 是因为有可能有if，else里面出现return导致后面的块不会执行的问题
+        // rearrange_block_list 其实可以解决这个问题。但是这里还是加上了check_return
         koopa_raw_value_data_t *ret = (koopa_raw_value_data_t *)exp->GenerateIR();
         koopa_raw_basic_block_data_t *false_block =
             (koopa_raw_basic_block_data_t *)ret->kind.data.branch.false_bb;

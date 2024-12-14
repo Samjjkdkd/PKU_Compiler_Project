@@ -111,16 +111,16 @@ static SymbolTable symbol_table;
 class BlockList
 {
 private:
-    std::vector<const void *> *block_list;
+    std::vector<const void *> block_list;
     std::vector<const void *> tmp_inst_buf;
 
 public:
-    void init(std::vector<const void *> *blocks);
     void add_block(koopa_raw_basic_block_data_t *block);
     void add_inst(const void *inst);
     void push_tmp_inst();
     bool check_return();
     void rearrange_block_list();
+    std::vector<const void *> get_block_list();
 };
 static BlockList block_list;
 
