@@ -35,9 +35,13 @@
 //                    | [Exp] ";"
 //                    | Block
 //                    | IfExp ["else" Stmt]
+//                    | WhileExp
 //                    | "return" [Exp] ";";
 
 // IfExp         ::= "if" "(" Exp ")" Stmt;
+// WhileExp      ::= "while" "(" Exp ")" Stmt;
+//                   | "continue" ";";
+//                   | "break" ";";
 
 // LVal        ::= IDENT;
 
@@ -116,9 +120,39 @@ public:
     void add_inst(const void *inst);
     void push_tmp_inst();
     bool check_return();
+    void rearrange_block_list();
 };
 static BlockList block_list;
 
+/******************************************************************************************************************/
+/************************************************LoopList**********************************************************/
+/******************************************************************************************************************/
+
+class LoopStack
+{
+private:
+    class LoopBlocks
+    {
+    public:
+        koopa_raw_basic_block_data_t *cond_block;
+        koopa_raw_basic_block_data_t *end_block;
+        LoopBlocks(koopa_raw_basic_block_data_t *cond_block, koopa_raw_basic_block_data_t *end_block)
+        {
+            this->cond_block = cond_block;
+            this->end_block = end_block;
+        }
+    };
+    std::vector<LoopBlocks> loop_stack;
+
+public:
+    void add_loop(koopa_raw_basic_block_data_t *cond, koopa_raw_basic_block_data_t *end);
+    koopa_raw_basic_block_data_t *get_cond_block();
+    koopa_raw_basic_block_data_t *get_end_block();
+    void del_loop();
+    bool is_inside_loop();
+};
+
+static LoopStack loop_stack;
 /********************************************************************************************************/
 /************************************************AST*****************************************************/
 /********************************************************************************************************/
@@ -289,7 +323,8 @@ public:
 // Stmt          :: = LVal "=" Exp ";"
 //                    | [Exp] ";"
 //                    | Block
-//                    | "if" "(" Exp ")" Stmt ["else" Stmt]
+//                    | IfExp ["else" Stmt]
+//                    | WhileExp
 //                    | "return"[Exp] ";";
 class StmtAST : public BaseAST
 {
@@ -297,6 +332,7 @@ public:
     enum
     {
         IF_ELSE,
+        WHILE,
         ASSIGN,
         EXP,
         BLOCK,
@@ -305,16 +341,35 @@ public:
     std::unique_ptr<BaseAST> lval;
     std::unique_ptr<BaseAST> exp;
     std::unique_ptr<BaseAST> block;
-    std::unique_ptr<BaseAST> if_exp;
-    std::unique_ptr<BaseAST> else_stmt;
+    std::unique_ptr<BaseAST> stmt;
 
     void Dump() const override;
     void *GenerateIR() const override;
 };
 
+// IfExp         ::= "if" "(" Exp ")" Stmt;
 class IfExpAST : public BaseAST
 {
 public:
+    std::unique_ptr<BaseAST> exp;
+    std::unique_ptr<BaseAST> stmt;
+
+    void Dump() const override;
+    void *GenerateIR() const override;
+};
+
+// WhileExp      ::= "while" "(" Exp ")" Stmt;
+//                   | "continue" ";";
+//                   | "break" ";";
+class WhileExpAST : public BaseAST
+{
+public:
+    enum
+    {
+        WHILE,
+        CONTINUE,
+        BREAK
+    } type;
     std::unique_ptr<BaseAST> exp;
     std::unique_ptr<BaseAST> stmt;
 

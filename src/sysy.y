@@ -37,7 +37,7 @@ using namespace std;
 
 // lexer 返回的所有 token 种类的声明
 // 注意 IDENT 和 INT_CONST 会返回 token 的值, 分别对应 str_val 和 int_val
-%token INT RETURN CONST IF ELSE
+%token INT RETURN CONST IF ELSE WHILE CONTINUE BREAK
 %token <str_val> LE GE EQ NE LAND LOR
 %token <str_val> LT GT MINOR PLUS MUL DIV MOD NOT
 %token <str_val> IDENT
@@ -51,7 +51,7 @@ using namespace std;
 %type <vec_val> ConstDefList BlockItemList VarDefList
 %type <ast_val> BlockItem LVal ConstExp
 %type <ast_val> VarDecl VarDef InitVal
-%type <ast_val> IfExp
+%type <ast_val> IfExp WhileExp
 
 %type <str_val> UnaryOp MulOp AddOp RelOp EqOp
 %type <int_val> Number
@@ -284,15 +284,21 @@ Stmt
   | IfExp ELSE Stmt {
     auto ast = new StmtAST();
     ast->type = StmtAST::IF_ELSE;
-    ast->if_exp = unique_ptr<BaseAST>($1);
-    ast->else_stmt = unique_ptr<BaseAST>($3);
+    ast->exp = unique_ptr<BaseAST>($1);
+    ast->stmt = unique_ptr<BaseAST>($3);
     $$ = ast;
   }
   | IfExp{
     auto ast = new StmtAST();
     ast->type = StmtAST::IF_ELSE;
-    ast->if_exp = unique_ptr<BaseAST>($1);
-    ast->else_stmt = nullptr;
+    ast->exp = unique_ptr<BaseAST>($1);
+    ast->stmt = nullptr;
+    $$ = ast;
+  }
+  | WhileExp {
+    auto ast = new StmtAST();
+    ast->type = StmtAST::WHILE;
+    ast->exp = unique_ptr<BaseAST>($1);
     $$ = ast;
   }
   | RETURN Exp ';' {
@@ -314,6 +320,30 @@ IfExp
     auto ast = new IfExpAST();
     ast->exp = unique_ptr<BaseAST>($3);
     ast->stmt = unique_ptr<BaseAST>($5);
+    $$ = ast;
+  }
+  ;
+
+WhileExp
+  : WHILE '(' Exp ')' Stmt{
+    auto ast = new WhileExpAST();
+    ast->type = WhileExpAST::WHILE;
+    ast->exp = unique_ptr<BaseAST>($3);
+    ast->stmt = unique_ptr<BaseAST>($5);
+    $$ = ast;
+  }
+  | CONTINUE ';' {
+    auto ast = new WhileExpAST();
+    ast->type = WhileExpAST::CONTINUE;
+    ast->exp = nullptr;
+    ast->stmt = nullptr;
+    $$ = ast;
+  }
+  | BREAK ';' {
+    auto ast = new WhileExpAST();
+    ast->type = WhileExpAST::BREAK;
+    ast->exp = nullptr;
+    ast->stmt = nullptr;
     $$ = ast;
   }
   ;

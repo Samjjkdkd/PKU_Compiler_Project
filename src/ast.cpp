@@ -118,7 +118,7 @@ void BlockList::push_tmp_inst()
     for (unsigned i = 0; i < tmp_inst_buf.size(); i++)
     {
         koopa_raw_value_t inst = (koopa_raw_value_t)tmp_inst_buf[i];
-        if (inst->kind.tag == KOOPA_RVT_RETURN)
+        if (inst->kind.tag == KOOPA_RVT_RETURN || inst->kind.tag == KOOPA_RVT_BRANCH || inst->kind.tag == KOOPA_RVT_JUMP)
         {
             tmp_inst_buf.erase(tmp_inst_buf.begin() + i + 1, tmp_inst_buf.end());
             break;
@@ -148,6 +148,52 @@ bool BlockList::check_return()
     }
     return true;
 }
+
+void BlockList::rearrange_block_list()
+{
+}
+/******************************************************************************************************************/
+/************************************************LoopStack*********************************************************/
+/******************************************************************************************************************/
+
+void LoopStack::add_loop(koopa_raw_basic_block_data_t *cond, koopa_raw_basic_block_data_t *end)
+{
+#ifdef DEBUG
+    std::cout << "LoopStack::add_loop" << std::endl;
+#endif
+    LoopBlocks loop(cond, end);
+    loop_stack.push_back(loop);
+}
+
+koopa_raw_basic_block_data_t *LoopStack::get_cond_block()
+{
+#ifdef DEBUG
+    std::cout << "LoopList::get_cond_block" << std::endl;
+#endif
+    return loop_stack.back().cond_block;
+}
+
+koopa_raw_basic_block_data_t *LoopStack::get_end_block()
+{
+#ifdef DEBUG
+    std::cout << "LoopStack::get_end_block" << std::endl;
+#endif
+    return loop_stack.back().end_block;
+}
+
+void LoopStack::del_loop()
+{
+#ifdef DEBUG
+    std::cout << "LoopStack::del_loop" << std::endl;
+#endif
+    loop_stack.pop_back();
+}
+
+bool LoopStack::is_inside_loop()
+{
+    return loop_stack.size() > 0;
+}
+
 /***************************************************************************************************************/
 /************************************************GenerateIR*****************************************************/
 /***************************************************************************************************************/
@@ -219,8 +265,14 @@ void *BlockItemAST::GenerateIR() const
     std::cout << "BlockItem-------------------------" << std::endl;
 #endif
     if (type == 1)
-        return decl->GenerateIR();
-    return stmt->GenerateIR();
+    {
+        decl->GenerateIR();
+    }
+    else
+    {
+        stmt->GenerateIR();
+    }
+    return nullptr;
 }
 
 void *DeclAST::GenerateIR() const
@@ -229,8 +281,14 @@ void *DeclAST::GenerateIR() const
     std::cout << "Decl" << std::endl;
 #endif
     if (type == 1)
-        return const_decl->GenerateIR();
-    return var_decl->GenerateIR();
+    {
+        const_decl->GenerateIR();
+    }
+    else
+    {
+        var_decl->GenerateIR();
+    }
+    return nullptr;
 }
 
 void *ConstDeclAST::GenerateIR() const
@@ -325,12 +383,11 @@ void *StmtAST::GenerateIR() const
 #ifdef DEBUG
     std::cout << "Stmt" << std::endl;
 #endif
-    koopa_raw_value_data_t *ret = nullptr;
     if (type == StmtAST::ASSIGN)
     {
         koopa_raw_value_t dest = (koopa_raw_value_t)symbol_table.get_value(lval->GetIdent()).data.var_value;
         koopa_raw_value_t value = (koopa_raw_value_t)exp->GenerateIR();
-        ret = generate_store_inst(dest, value);
+        koopa_raw_value_data_t *ret = generate_store_inst(dest, value);
         block_list.add_inst(ret);
     }
     else if (type == StmtAST::EXP)
@@ -347,16 +404,16 @@ void *StmtAST::GenerateIR() const
         koopa_raw_value_t value = nullptr;
         if (exp != nullptr)
             value = (koopa_raw_value_t)exp->GenerateIR();
-        ret = generate_return_inst(value);
+        koopa_raw_value_data_t *ret = generate_return_inst(value);
         block_list.add_inst(ret);
     }
     else if (type == StmtAST::IF_ELSE)
     {
-        ret = (koopa_raw_value_data_t *)if_exp->GenerateIR();
+        koopa_raw_value_data_t *ret = (koopa_raw_value_data_t *)exp->GenerateIR();
         koopa_raw_basic_block_data_t *false_block =
             (koopa_raw_basic_block_data_t *)ret->kind.data.branch.false_bb;
         bool true_block_no_return = block_list.check_return();
-        if (else_stmt != nullptr)
+        if (stmt != nullptr)
         {
             koopa_raw_basic_block_data_t *end_block = generate_block("%end");
             if (true_block_no_return)
@@ -365,7 +422,7 @@ void *StmtAST::GenerateIR() const
             }
             block_list.push_tmp_inst();
             block_list.add_block(false_block);
-            else_stmt->GenerateIR();
+            stmt->GenerateIR();
             bool false_block_no_return = block_list.check_return();
             if (false_block_no_return)
             {
@@ -387,7 +444,11 @@ void *StmtAST::GenerateIR() const
             block_list.add_block(false_block);
         }
     }
-    return ret;
+    else if (type == StmtAST::WHILE)
+    {
+        exp->GenerateIR();
+    }
+    return nullptr;
 }
 
 void *IfExpAST::GenerateIR() const
@@ -403,6 +464,62 @@ void *IfExpAST::GenerateIR() const
     block_list.add_block((koopa_raw_basic_block_data_t *)ret->kind.data.branch.true_bb);
     stmt->GenerateIR();
     return ret;
+}
+
+void *WhileExpAST::GenerateIR() const
+{
+#ifdef DEBUG
+    std::cout << "WhileExp" << std::endl;
+#endif
+    if (type == WhileExpAST::WHILE)
+    {
+        koopa_raw_basic_block_data_t *cond_block = generate_block("%cond");
+        koopa_raw_basic_block_data_t *body_block = generate_block("%body");
+        koopa_raw_basic_block_data_t *end_block = generate_block("%end");
+        loop_stack.add_loop(cond_block, end_block);
+
+        block_list.add_inst(generate_jump_inst(cond_block));
+        block_list.push_tmp_inst();
+        block_list.add_block(cond_block);
+        koopa_raw_value_t cond = (koopa_raw_value_t)exp->GenerateIR();
+        koopa_raw_value_data_t *ret = generate_branch_inst(cond, body_block, end_block);
+        block_list.add_inst(ret);
+        block_list.push_tmp_inst();
+        block_list.add_block(body_block);
+        stmt->GenerateIR();
+        block_list.add_inst(generate_jump_inst(cond_block));
+        block_list.push_tmp_inst();
+        block_list.add_block(end_block);
+
+        loop_stack.del_loop();
+    }
+    if (type == WhileExpAST::CONTINUE)
+    {
+        if (loop_stack.is_inside_loop())
+        {
+            koopa_raw_basic_block_data_t *cond_block = loop_stack.get_cond_block();
+            block_list.add_inst(generate_jump_inst(cond_block));
+        }
+        else
+        {
+            // std::cout << "Error: continue not in loop" << std::endl;
+            assert(0);
+        }
+    }
+    if (type == WhileExpAST::BREAK)
+    {
+        if (loop_stack.is_inside_loop())
+        {
+            koopa_raw_basic_block_data_t *end_block = loop_stack.get_end_block();
+            block_list.add_inst(generate_jump_inst(end_block));
+        }
+        else
+        {
+            // std::cout << "Error: break not in loop" << std::endl;
+            assert(0);
+        }
+    }
+    return nullptr;
 }
 
 void *LValAST::GenerateIR() const
@@ -1129,13 +1246,17 @@ void StmtAST::Dump() const
     }
     else if (type == StmtAST::IF_ELSE)
     {
-        if_exp->Dump();
-        if (else_stmt != nullptr)
+        exp->Dump();
+        if (stmt != nullptr)
         {
             std::cout << std::endl
                       << "else";
-            else_stmt->Dump();
+            stmt->Dump();
         }
+    }
+    else if (type == StmtAST::WHILE)
+    {
+        exp->Dump();
     }
     std::cout << "}";
 }
@@ -1147,6 +1268,27 @@ void IfExpAST::Dump() const
     exp->Dump();
     std::cout << ")";
     stmt->Dump();
+    std::cout << "}";
+}
+
+void WhileExpAST::Dump() const
+{
+    std::cout << "WhileExp{";
+    if (type == WhileExpAST::WHILE)
+    {
+        std::cout << "while(";
+        exp->Dump();
+        std::cout << ")";
+        stmt->Dump();
+    }
+    else if (type == WhileExpAST::CONTINUE)
+    {
+        std::cout << "continue;";
+    }
+    else if (type == WhileExpAST::BREAK)
+    {
+        std::cout << "break;";
+    }
     std::cout << "}";
 }
 
