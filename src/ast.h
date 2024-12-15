@@ -10,11 +10,14 @@
 #include "koopa.h"
 
 // #define DEBUG
-//  CompUnit      ::= FuncDef;
+// CompUnit      ::= Def {Def};
+// Def           ::= FuncDef;
 
-// FuncDef       ::= FuncType IDENT "(" ")" Block;
+// FuncDef       ::= FuncType IDENT "(" [FuncFParams] ")" Block;
 
-// FuncType      ::= "int";
+// FuncType      ::= "void" | "int";
+// FuncFParams   ::= FuncFParam {"," FuncFParam};
+// FuncFParam    ::= BType IDENT;
 
 // Block         ::= "{" {BlockItem} "}";
 // BlockItem     ::= Decl | Stmt;
@@ -56,11 +59,13 @@
 // AddOp       ::= "+" | "-";
 // MulExp      ::= UnaryExp | MulExp MulOp UnaryExp;
 // MulOp       ::= "*" | "/" | "%";
-// UnaryExp    ::= PrimaryExp | UnaryOp UnaryExp;
+// UnaryExp    ::= PrimaryExp
+//                 | UnaryOp UnaryExp
+//                 | IDENT "(" [FuncRParams] ")";
 // UnaryOp     ::= "+" | "-" | "!";
 
 // PrimaryExp  ::= "(" Exp ")"  | LVal | Number;
-
+// FuncRParams ::= Exp {"," Exp};
 // Number      ::= INT_CONST;
 
 /****************************************************************************************************************/
@@ -167,8 +172,18 @@ public:
     virtual void *GenerateIR() const { return nullptr; };
 };
 
-// CompUnit  ::= FuncDef
+// CompUnit  ::= Def {Def};
 class CompUnitAST : public BaseAST
+{
+public:
+    std::unique_ptr<std::vector<std::unique_ptr<BaseAST>>> def_list;
+
+    void Dump() const override;
+    void *GenerateIR() const override;
+};
+
+// Def       ::= FuncDef;
+class DefAST : public BaseAST
 {
 public:
     std::unique_ptr<BaseAST> func_def;

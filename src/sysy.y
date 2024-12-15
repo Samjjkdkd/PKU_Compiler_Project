@@ -43,15 +43,18 @@ using namespace std;
 %token <str_val> IDENT
 %token <int_val> INT_CONST
 
+%nonassoc LOWER_THAN_ELSE
+%nonassoc ELSE
+
 // 非终结符的类型定义
 %type <ast_val> FuncDef FuncType Block Stmt 
 %type <ast_val> Exp PrimaryExp UnaryExp MulExp AddExp
 %type <ast_val> RelExp EqExp LAndExp LOrExp
 %type <ast_val> Decl ConstDecl BType ConstDef ConstInitVal 
-%type <vec_val> ConstDefList BlockItemList VarDefList
+%type <vec_val> ConstDefList BlockItemList VarDefList DefList
 %type <ast_val> BlockItem LVal ConstExp
 %type <ast_val> VarDecl VarDef InitVal
-%type <ast_val> IfExp WhileExp
+%type <ast_val> IfExp WhileExp Def
 
 %type <str_val> UnaryOp MulOp AddOp RelOp EqOp
 %type <int_val> Number
@@ -64,10 +67,31 @@ using namespace std;
 // 此时我们应该把 FuncDef 返回的结果收集起来, 作为 AST 传给调用 parser 的函数
 // $1 指代规则里第一个符号的返回值, 也就是 FuncDef 的返回值
 CompUnit
-  : FuncDef {
+  : DefList {
     auto comp_unit = make_unique<CompUnitAST>();
-    comp_unit->func_def = unique_ptr<BaseAST>($1);
+    comp_unit->def_list = unique_ptr<vector<unique_ptr<BaseAST> >>($1);
     ast = move(comp_unit);
+  }
+  ;
+
+DefList
+  : Def {
+    auto ast = new vector<unique_ptr<BaseAST> >();
+    ast->push_back(unique_ptr<BaseAST>($1));
+    $$ = ast;
+  }
+  | DefList Def {
+    auto ast = static_cast<vector<unique_ptr<BaseAST> >*>($1);
+    ast->push_back(unique_ptr<BaseAST>($2));
+    $$ = ast;
+  }
+  ;
+
+Def
+  : FuncDef {
+    auto ast = new DefAST();
+    ast->func_def = unique_ptr<BaseAST>($1);
+    $$ = ast;
   }
   ;
 
@@ -177,7 +201,7 @@ ConstDefList
     ast->push_back(unique_ptr<BaseAST>($1));
     $$ = ast;
   }
-  | ConstDefList ','ConstDef {
+  | ConstDefList ',' ConstDef {
     auto ast = static_cast<vector<unique_ptr<BaseAST> >*>($1);
     ast->push_back(unique_ptr<BaseAST>($3));
     $$ = ast;
@@ -281,14 +305,14 @@ Stmt
     ast->block = unique_ptr<BaseAST>($1);
     $$ = ast;
   }
-  | IfExp ELSE Stmt {
+  | IfExp ELSE Stmt %prec ELSE{
     auto ast = new StmtAST();
     ast->type = StmtAST::IF_ELSE;
     ast->exp = unique_ptr<BaseAST>($1);
     ast->stmt = unique_ptr<BaseAST>($3);
     $$ = ast;
   }
-  | IfExp{
+  | IfExp %prec LOWER_THAN_ELSE{
     auto ast = new StmtAST();
     ast->type = StmtAST::IF_ELSE;
     ast->exp = unique_ptr<BaseAST>($1);
