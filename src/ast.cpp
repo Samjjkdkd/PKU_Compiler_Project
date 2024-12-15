@@ -251,8 +251,8 @@ void *CompUnitAST::GenerateIR() const
 #endif
     std::vector<const void *> funcs;
     koopa_raw_program_t *ret = new koopa_raw_program_t();
-    for (auto def = (*def_list).rbegin();
-         def != (*def_list).rend(); def++)
+    for (auto def = (*def_list).begin();
+         def != (*def_list).end(); def++)
     {
         funcs.push_back((*def)->GenerateIR());
     }
@@ -313,8 +313,8 @@ void *BlockAST::GenerateIR() const
     }
     symbol_table.add_table();
 
-    for (auto block_item = (*block_item_list).rbegin();
-         block_item != (*block_item_list).rend(); block_item++)
+    for (auto block_item = (*block_item_list).begin();
+         block_item != (*block_item_list).end(); block_item++)
     {
         (*block_item)->GenerateIR();
     }
@@ -360,8 +360,8 @@ void *ConstDeclAST::GenerateIR() const
     std::cout << "ConstDecl" << std::endl;
 #endif
     // koopa_raw_type_t type = (koopa_raw_type_t)btype->GenerateIR();
-    for (auto const_def = (*const_def_list).rbegin();
-         const_def != (*const_def_list).rend(); const_def++)
+    for (auto const_def = (*const_def_list).begin();
+         const_def != (*const_def_list).end(); const_def++)
     {
         (*const_def)->GenerateIR();
     }
@@ -408,8 +408,8 @@ void *VarDeclAST::GenerateIR() const
     std::cout << "VarDecl" << std::endl;
 #endif
     // koopa_raw_type_t type = (koopa_raw_type_t)btype->GenerateIR();
-    for (auto var_def = (*var_def_list).rbegin();
-         var_def != (*var_def_list).rend(); var_def++)
+    for (auto var_def = (*var_def_list).begin();
+         var_def != (*var_def_list).end(); var_def++)
     {
         (*var_def)->GenerateIR();
     }
@@ -1143,8 +1143,8 @@ koopa_raw_value_data_t *generate_branch_inst(
 void CompUnitAST::Dump() const
 {
     std::cout << "CompUnit{";
-    for (auto def = (*def_list).rbegin();
-         def != (*def_list).rend(); def++)
+    for (auto def = (*def_list).begin();
+         def != (*def_list).end(); def++)
     {
         std::cout << std::endl
                   << "{";
@@ -1186,8 +1186,8 @@ void BlockAST::Dump() const
         std::cout << "{}}";
         return;
     }
-    for (auto block_item = (*block_item_list).rbegin();
-         block_item != (*block_item_list).rend(); block_item++)
+    for (auto block_item = (*block_item_list).begin();
+         block_item != (*block_item_list).end(); block_item++)
     {
         std::cout << std::endl
                   << "{";
@@ -1223,9 +1223,9 @@ void ConstDeclAST::Dump() const
     std::cout << "ConstDecl{";
     std::cout << "const ";
     btype->Dump();
-    (*(*const_def_list).rbegin())->Dump();
-    for (auto const_def = (*const_def_list).rbegin() + 1;
-         const_def != (*const_def_list).rend(); const_def++)
+    (*(*const_def_list).begin())->Dump();
+    for (auto const_def = (*const_def_list).begin() + 1;
+         const_def != (*const_def_list).end(); const_def++)
     {
         std::cout << ",";
         (*const_def)->Dump();
@@ -1266,9 +1266,9 @@ void VarDeclAST::Dump() const
 {
     std::cout << "VarDecl{";
     btype->Dump();
-    (*(*var_def_list).rbegin())->Dump();
-    for (auto var_def = (*var_def_list).rbegin() + 1;
-         var_def != (*var_def_list).rend(); var_def++)
+    (*(*var_def_list).begin())->Dump();
+    for (auto var_def = (*var_def_list).begin() + 1;
+         var_def != (*var_def_list).end(); var_def++)
     {
         std::cout << ",";
         (*var_def)->Dump();
