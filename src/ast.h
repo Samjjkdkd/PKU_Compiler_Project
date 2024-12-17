@@ -9,7 +9,7 @@
 #include <unordered_map>
 #include "koopa.h"
 
-// #define DEBUG
+#define DEBUG
 // CompUnit      ::= Def {Def};
 // Def           ::= FuncDef;
 
@@ -579,8 +579,9 @@ koopa_raw_slice_t generate_slice(const void *data,
                                  koopa_raw_slice_item_kind_t kind = KOOPA_RSIK_UNKNOWN);
 koopa_raw_type_t generate_type(koopa_raw_type_tag_t tag);
 koopa_raw_type_t generate_type(koopa_raw_type_tag_t tag, koopa_raw_type_tag_t base);
-koopa_raw_value_data *generate_number(int32_t number);
-koopa_raw_function_data_t *generate_function(std::string ident, const struct koopa_raw_type_kind *func_type);
+koopa_raw_value_data_t *generate_number(int32_t number);
+koopa_raw_value_data_t *generate_func_arg_ref(koopa_raw_type_t ty, std::string ident);
+koopa_raw_function_data_t *generate_function(std::string ident, std::vector<const void *> &params, const struct koopa_raw_type_kind *func_type);
 koopa_raw_basic_block_data_t *generate_block(const char *name);
 koopa_raw_value_data_t *generate_alloc_inst(std::string ident);
 koopa_raw_value_data_t *generate_store_inst(koopa_raw_value_t dest, koopa_raw_value_t value);
@@ -589,3 +590,4 @@ koopa_raw_value_data_t *generate_binary_inst(koopa_raw_value_t lhs, koopa_raw_va
 koopa_raw_value_data_t *generate_return_inst(koopa_raw_value_t value);
 koopa_raw_value_data_t *generate_jump_inst(koopa_raw_basic_block_data_t *target);
 koopa_raw_value_data_t *generate_branch_inst(koopa_raw_value_t cond, koopa_raw_basic_block_data_t *true_bb, koopa_raw_basic_block_data_t *false_bb);
+koopa_raw_value_data_t *generate_call_inst(koopa_raw_function_t func, std::vector<const void *> &args);

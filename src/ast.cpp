@@ -11,8 +11,13 @@ void SymbolTable::add_symbol(std::string name, SymbolTable::Value value)
     std::cout << name << " ";
     if (value.type == SymbolTable::Value::Var)
         std::cout << "Var " << (void *)value.data.var_value << std::endl;
-    else
+    else if (value.type == SymbolTable::Value::Const)
         std::cout << "Const " << value.data.const_value << std::endl;
+    else if (value.type == SymbolTable::Value::Func)
+        std::cout << "Func " << (void *)value.data.func_value << std::endl;
+    else
+        std::cout << "Error" << std::endl;
+
 #endif
     symbol_table_stack.back()[name] = value;
 }
@@ -32,8 +37,13 @@ SymbolTable::Value SymbolTable::get_value(std::string name)
 #ifdef DEBUG
             if (value->second.type == SymbolTable::Value::Var)
                 std::cout << "Var " << (void *)value->second.data.var_value << std::endl;
-            else
+            else if (value->second.type == SymbolTable::Value::Const)
                 std::cout << "Const " << value->second.data.const_value << std::endl;
+            else if (value->second.type == SymbolTable::Value::Func)
+                std::cout << "Func " << (void *)value->second.data.func_value << std::endl;
+            else
+                std::cout << "Error" << std::endl;
+
 #endif
             return value->second;
         }
@@ -63,8 +73,10 @@ void SymbolTable::del_table()
         std::cout << it->first << " ";
         if (it->second.type == SymbolTable::Value::Var)
             std::cout << "Var " << (void *)it->second.data.var_value << std::endl;
-        else
+        else if (it->second.type == SymbolTable::Value::Const)
             std::cout << "Const " << it->second.data.const_value << std::endl;
+        else if (it->second.type == SymbolTable::Value::Func)
+            std::cout << "Func " << (void *)it->second.data.func_value << std::endl;
     }
 #endif
     symbol_table_stack.pop_back();
@@ -73,6 +85,15 @@ void SymbolTable::del_table()
 /**************************************************************************************************************/
 /************************************************BlockList*****************************************************/
 /**************************************************************************************************************/
+
+void BlockList::init()
+{
+#ifdef DEBUG
+    std::cout << "BlockList::init" << std::endl;
+#endif
+    block_list.clear();
+    tmp_inst_buf.clear();
+}
 
 std::vector<const void *> BlockList::get_block_list()
 {
@@ -113,7 +134,6 @@ void BlockList::push_tmp_inst()
     }
     if (tmp_inst_buf.size() == 0)
     {
-        block_list.pop_back();
         return;
     }
     for (unsigned i = 0; i < tmp_inst_buf.size(); i++)
@@ -126,7 +146,7 @@ void BlockList::push_tmp_inst()
         }
     }
     koopa_raw_basic_block_data_t *last = (koopa_raw_basic_block_data_t *)block_list.back();
-    assert(last->insts.buffer == nullptr);
+    assert(!last->insts.buffer);
     last->insts = generate_slice(tmp_inst_buf, KOOPA_RSIK_VALUE);
     tmp_inst_buf.clear();
     return;
@@ -249,6 +269,7 @@ void *CompUnitAST::GenerateIR() const
 #ifdef DEBUG
     std::cout << "CompUnit" << std::endl;
 #endif
+    symbol_table.add_table();
     std::vector<const void *> funcs;
     koopa_raw_program_t *ret = new koopa_raw_program_t();
     for (auto def = (*def_list).begin();
@@ -256,6 +277,7 @@ void *CompUnitAST::GenerateIR() const
     {
         funcs.push_back((*def)->GenerateIR());
     }
+    symbol_table.del_table();
     ret->values = generate_slice(KOOPA_RSIK_VALUE);
     ret->funcs = generate_slice(funcs, KOOPA_RSIK_FUNCTION);
     return ret;
@@ -275,14 +297,54 @@ void *FuncDefAST::GenerateIR() const
     std::cout << "FuncDef" << std::endl;
 #endif
     const struct koopa_raw_type_kind *func_ty = (const struct koopa_raw_type_kind *)func_type->GenerateIR();
-    koopa_raw_function_data_t *ret = generate_function(ident, func_ty);
 
+    std::vector<const void *> params;
+    for (auto func_fparam = (*func_fparam_list).begin();
+         func_fparam != (*func_fparam_list).end(); func_fparam++)
+    {
+        koopa_raw_value_data_t *func_arg_ref = (koopa_raw_value_data_t *)((*func_fparam)->GenerateIR());
+        size_t index = std::distance((*func_fparam_list).begin(), func_fparam);
+        func_arg_ref->kind.data.func_arg_ref.index = index;
+        params.push_back(func_arg_ref);
+    }
+    koopa_raw_function_data_t *ret = generate_function(ident, params, func_ty);
+    symbol_table.add_symbol(ident,
+                            SymbolTable::Value(SymbolTable::Value::Func, (koopa_raw_function_t)ret));
+
+    block_list.init();
     koopa_raw_basic_block_data_t *entry = generate_block("%entry");
     block_list.add_block(entry);
+    symbol_table.add_table();
+
+    for (size_t i = 0; i < params.size(); i++)
+    {
+        koopa_raw_value_data_t *param = (koopa_raw_value_data_t *)params[i];
+        koopa_raw_value_data_t *alloc = generate_alloc_inst(param->name + 1);
+        symbol_table.add_symbol(alloc->name + 1,
+                                SymbolTable::Value(SymbolTable::Value::Var, (koopa_raw_value_t)alloc));
+        block_list.add_inst(alloc);
+        koopa_raw_value_data_t *store =
+            generate_store_inst((koopa_raw_value_t)alloc, (koopa_raw_value_t)param);
+        block_list.add_inst(store);
+    }
+
     block->GenerateIR();
-    // if there is no return, add a return 0
-    koopa_raw_value_data_t *ret_inst = generate_return_inst(generate_number(0));
+
+    // if there is no return, add a return
+    koopa_raw_value_data_t *ret_inst = nullptr;
+    if (func_ty->tag == KOOPA_RTT_UNIT)
+    {
+        ret_inst = generate_return_inst((koopa_raw_value_t) nullptr);
+    }
+    else
+    {
+        assert(func_ty->tag == KOOPA_RTT_INT32);
+        ret_inst = generate_return_inst(generate_number(0));
+    }
+    assert(ret_inst != nullptr);
     block_list.add_inst(ret_inst);
+
+    symbol_table.del_table();
     // if there already has a return, push_tmp_inst will erase the return 0
     block_list.push_tmp_inst();
     block_list.rearrange_block_list();
@@ -297,7 +359,9 @@ void *FuncFParamAST::GenerateIR() const
 #ifdef DEBUG
     std::cout << "FuncFParam" << std::endl;
 #endif
-    return btype->GenerateIR();
+    koopa_raw_type_t param_ty = (koopa_raw_type_t)btype->GenerateIR();
+    koopa_raw_value_data_t *ret = generate_func_arg_ref(param_ty, ident);
+    return ret;
 }
 
 void *FuncTypeAST::GenerateIR() const
@@ -381,7 +445,6 @@ void *ConstDeclAST::GenerateIR() const
 
 void *BTypeAST::GenerateIR() const
 {
-    assert(0);
 #ifdef DEBUG
     std::cout << "BType" << std::endl;
 #endif
@@ -814,28 +877,46 @@ void *UnaryExpAST::GenerateIR() const
 #ifdef DEBUG
     std::cout << "UnaryExp" << std::endl;
 #endif
-    if (type == 1)
+    if (type == PRIMARY)
     {
         return primary_exp->GenerateIR();
     }
-    if (unary_op == "+")
+    else if (type == UNARY)
     {
-        return unary_exp->GenerateIR();
+        if (unary_op == "+")
+        {
+            return unary_exp->GenerateIR();
+        }
+        koopa_raw_binary_op_t op;
+        if (unary_op == "-")
+        {
+            op = KOOPA_RBO_SUB;
+        }
+        if (unary_op == "!")
+        {
+            op = KOOPA_RBO_EQ;
+        }
+        koopa_raw_value_t lhs = (koopa_raw_value_t)generate_number(0);
+        koopa_raw_value_t rhs = (koopa_raw_value_t)unary_exp->GenerateIR();
+        koopa_raw_value_data_t *ret = generate_binary_inst(lhs, rhs, op);
+        block_list.add_inst(ret);
+        return ret;
     }
-    koopa_raw_binary_op_t op;
-    if (unary_op == "-")
+    else if (type == FUNC)
     {
-        op = KOOPA_RBO_SUB;
+        koopa_raw_function_t func = symbol_table.get_value(ident).data.func_value;
+        std::vector<const void *> args;
+        for (auto arg = (*func_rparam_list).begin();
+             arg != (*func_rparam_list).end(); arg++)
+        {
+            args.push_back((*arg)->GenerateIR());
+        }
+        koopa_raw_value_data_t *ret = generate_call_inst(func, args);
+        block_list.add_inst(ret);
+        return ret;
     }
-    if (unary_op == "!")
-    {
-        op = KOOPA_RBO_EQ;
-    }
-    koopa_raw_value_t lhs = (koopa_raw_value_t)generate_number(0);
-    koopa_raw_value_t rhs = (koopa_raw_value_t)unary_exp->GenerateIR();
-    koopa_raw_value_data_t *ret = generate_binary_inst(lhs, rhs, op);
-    block_list.add_inst(ret);
-    return ret;
+    assert(0);
+    return nullptr;
 }
 
 void *PrimaryExpAST::GenerateIR() const
@@ -940,14 +1021,18 @@ std::int32_t MulExpAST::CalculateValue() const
 
 std::int32_t UnaryExpAST::CalculateValue() const
 {
-    if (type == 1)
+    if (type == PRIMARY)
         return primary_exp->CalculateValue();
-    if (unary_op == "+")
-        return unary_exp->CalculateValue();
-    if (unary_op == "-")
-        return -unary_exp->CalculateValue();
-    if (unary_op == "!")
-        return !unary_exp->CalculateValue();
+    else if (type == UNARY)
+    {
+        if (unary_op == "+")
+            return unary_exp->CalculateValue();
+        if (unary_op == "-")
+            return -unary_exp->CalculateValue();
+        if (unary_op == "!")
+            return !unary_exp->CalculateValue();
+    }
+    assert(0);
     return 0;
 }
 
@@ -1033,20 +1118,46 @@ koopa_raw_value_data_t *generate_number(int32_t number)
     return ret;
 }
 
-koopa_raw_function_data_t *generate_function(std::string ident, const struct koopa_raw_type_kind *func_ty)
+koopa_raw_value_data_t *generate_func_arg_ref(koopa_raw_type_t ty, std::string ident)
 {
-    koopa_raw_function_data_t *ret = new koopa_raw_function_data_t();
-    // init ty
-    koopa_raw_type_kind_t *ty = new koopa_raw_type_kind_t();
-    ty->tag = KOOPA_RTT_FUNCTION;
-    ty->data.function.params = generate_slice(KOOPA_RSIK_TYPE);
-    ty->data.function.ret = func_ty;
+    koopa_raw_value_data_t *ret = new koopa_raw_value_data();
     ret->ty = ty;
     char *name = new char[ident.size() + 2];
     name[ident.size() + 1] = '\0';
     ret->name = strcpy(name, ("@" + ident).c_str());
+    ret->used_by = generate_slice(KOOPA_RSIK_VALUE);
+    ret->kind.tag = KOOPA_RVT_FUNC_ARG_REF;
+    ret->kind.data.func_arg_ref.index = -1;
+    return ret;
+}
+
+koopa_raw_function_data_t *generate_function(std::string ident, std::vector<const void *> &params, const struct koopa_raw_type_kind *func_type)
+{
+    koopa_raw_function_data_t *ret = new koopa_raw_function_data_t();
+    // init ty
+    koopa_raw_type_kind_t *func_ty = new koopa_raw_type_kind_t();
+    func_ty->tag = KOOPA_RTT_FUNCTION;
+    if (params.size() == 0)
+    {
+        func_ty->data.function.params = generate_slice(KOOPA_RSIK_TYPE);
+        ret->params = generate_slice(KOOPA_RSIK_VALUE);
+    }
+    else
+    {
+        std::vector<const void *> params_ty;
+        for (size_t i = 0; i < params.size(); i++)
+        {
+            params_ty.push_back(((koopa_raw_value_data_t *)params[i])->ty);
+        }
+        func_ty->data.function.params = generate_slice(params_ty, KOOPA_RSIK_TYPE);
+        ret->params = generate_slice(params, KOOPA_RSIK_VALUE);
+    }
+    func_ty->data.function.ret = func_type;
+    ret->ty = func_ty;
+    char *name = new char[ident.size() + 2];
+    name[ident.size() + 1] = '\0';
+    ret->name = strcpy(name, ("@" + ident).c_str());
     // init params
-    ret->params = generate_slice(KOOPA_RSIK_VALUE);
     return ret;
 }
 
@@ -1147,6 +1258,22 @@ koopa_raw_value_data_t *generate_branch_inst(
     ret->kind.data.branch.false_args = generate_slice(KOOPA_RSIK_VALUE);
     return ret;
 }
+
+koopa_raw_value_data_t *generate_call_inst(koopa_raw_function_t func, std::vector<const void *> &args)
+{
+    koopa_raw_value_data_t *ret = new koopa_raw_value_data();
+    ret->ty = func->ty->data.function.ret;
+    ret->name = nullptr;
+    ret->used_by = generate_slice(KOOPA_RSIK_VALUE);
+    ret->kind.tag = KOOPA_RVT_CALL;
+    ret->kind.data.call.callee = func;
+    if (args.size() == 0)
+        ret->kind.data.call.args = generate_slice(KOOPA_RSIK_VALUE);
+    else
+        ret->kind.data.call.args = generate_slice(args, KOOPA_RSIK_VALUE);
+    return ret;
+}
+
 /*********************************************************************************************************/
 /************************************************Dump*****************************************************/
 /*********************************************************************************************************/
