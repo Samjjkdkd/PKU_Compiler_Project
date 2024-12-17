@@ -37,7 +37,7 @@ using namespace std;
 
 // lexer 返回的所有 token 种类的声明
 // 注意 IDENT 和 INT_CONST 会返回 token 的值, 分别对应 str_val 和 int_val
-%token INT RETURN CONST IF ELSE WHILE CONTINUE BREAK
+%token INT RETURN CONST IF ELSE WHILE CONTINUE BREAK VOID
 %token <str_val> LE GE EQ NE LAND LOR
 %token <str_val> LT GT MINOR PLUS MUL DIV MOD NOT
 %token <str_val> IDENT
@@ -51,10 +51,12 @@ using namespace std;
 %type <ast_val> Exp PrimaryExp UnaryExp MulExp AddExp
 %type <ast_val> RelExp EqExp LAndExp LOrExp
 %type <ast_val> Decl ConstDecl BType ConstDef ConstInitVal 
-%type <vec_val> ConstDefList BlockItemList VarDefList DefList
+%type <vec_val> ConstDefList BlockItemList VarDefList
+%type <vec_val> DefList FuncFParamList FuncRParamList
 %type <ast_val> BlockItem LVal ConstExp
 %type <ast_val> VarDecl VarDef InitVal
-%type <ast_val> IfExp WhileExp Def
+%type <ast_val> IfExp WhileExp
+%type <ast_val> Def FuncFParam
 
 %type <str_val> UnaryOp MulOp AddOp RelOp EqOp
 %type <int_val> Number
@@ -107,11 +109,37 @@ Def
 // 这种写法会省下很多内存管理的负担
 
 FuncDef
-  : FuncType IDENT '(' ')' Block {
+  : FuncType IDENT '(' FuncFParamList ')' Block {
     auto ast = new FuncDefAST();
     ast->func_type = unique_ptr<BaseAST>($1);
     ast->ident = *unique_ptr<string>($2);
-    ast->block = unique_ptr<BaseAST>($5);
+    ast->func_fparam_list = unique_ptr<vector<unique_ptr<BaseAST> >>($4);
+    ast->block = unique_ptr<BaseAST>($6);
+    $$ = ast;
+  }
+  ;
+
+FuncFParamList
+  : FuncFParam {
+    auto ast = new vector<unique_ptr<BaseAST> >();
+    ast->push_back(unique_ptr<BaseAST>($1));
+    $$ = ast;
+  }
+  | FuncFParamList ',' FuncFParam {
+    auto ast = static_cast<vector<unique_ptr<BaseAST> >*>($1);
+    ast->push_back(unique_ptr<BaseAST>($3));
+    $$ = ast;
+  }
+  | {
+    $$ = new vector<unique_ptr<BaseAST> >();
+  }
+  ;
+
+FuncFParam
+  : BType IDENT {
+    auto ast = new FuncFParamAST();
+    ast->btype = unique_ptr<BaseAST>($1);
+    ast->ident = *unique_ptr<string>($2);
     $$ = ast;
   }
   ;
@@ -119,6 +147,12 @@ FuncDef
 FuncType
   : INT {
     auto ast = new FuncTypeAST();
+    ast->type = FuncTypeAST::INT;
+    $$ = ast;
+  }
+  | VOID {
+    auto ast = new FuncTypeAST();
+    ast->type = FuncTypeAST::VOID;
     $$ = ast;
   }
   ;
@@ -127,11 +161,6 @@ Block
   : '{' BlockItemList '}' {
     auto ast = new BlockAST();
     ast->block_item_list = unique_ptr<vector<unique_ptr<BaseAST> >>($2);
-    $$ = ast;
-  }
-  | '{' '}' {
-    auto ast = new BlockAST();
-    ast->block_item_list = nullptr;
     $$ = ast;
   }
   ;
@@ -146,6 +175,9 @@ BlockItemList
     auto ast = static_cast<vector<unique_ptr<BaseAST> >*>($1);
     ast->push_back(unique_ptr<BaseAST>($2));
     $$ = ast;
+  }
+  | {
+    $$ = new vector<unique_ptr<BaseAST> >();
   }
   ;
 
@@ -522,16 +554,39 @@ MulOp
 UnaryExp
   : PrimaryExp {
     auto ast = new UnaryExpAST();
-    ast->type = 1;
+    ast->type = UnaryExpAST::PRIMARY;
     ast->primary_exp = unique_ptr<BaseAST>($1);
     $$ = ast;
   }
   | UnaryOp UnaryExp {
     auto ast = new UnaryExpAST();
-    ast->type = 2;
+    ast->type = UnaryExpAST::UNARY;
     ast->unary_op = *unique_ptr<string>($1);
     ast->unary_exp = unique_ptr<BaseAST>($2);
     $$ = ast;
+  }
+  | IDENT '(' FuncRParamList ')' {
+    auto ast = new UnaryExpAST();
+    ast->type = UnaryExpAST::FUNC;
+    ast->ident = *unique_ptr<string>($1);
+    ast->func_rparam_list = unique_ptr<vector<unique_ptr<BaseAST> >>($3);
+    $$ = ast;
+  }
+  ;
+
+FuncRParamList
+  : Exp {
+    auto ast = new vector<unique_ptr<BaseAST> >();
+    ast->push_back(unique_ptr<BaseAST>($1));
+    $$ = ast;
+  }
+  | FuncRParamList ',' Exp {
+    auto ast = static_cast<vector<unique_ptr<BaseAST> >*>($1);
+    ast->push_back(unique_ptr<BaseAST>($3));
+    $$ = ast;
+  } 
+  |{
+    $$ = new vector<unique_ptr<BaseAST> >();
   }
   ;
 

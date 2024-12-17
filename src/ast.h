@@ -81,21 +81,30 @@ public:
         enum ValueType
         {
             Var,
-            Const
+            Const,
+            Func
         } type;
         union Data
         {
             int const_value;
             koopa_raw_value_t var_value;
+            koopa_raw_function_t func_value;
         } data;
         Value() = default;
         Value(ValueType type, int value) : type(type)
         {
+            assert(type == Const);
             data.const_value = value;
         };
         Value(ValueType type, koopa_raw_value_t value) : type(type)
         {
+            assert(type == Var);
             data.var_value = value;
+        };
+        Value(ValueType type, koopa_raw_function_t value) : type(type)
+        {
+            assert(type == Func);
+            data.func_value = value;
         };
     };
 
@@ -120,6 +129,7 @@ private:
     std::vector<const void *> tmp_inst_buf;
 
 public:
+    void init();
     void add_block(koopa_raw_basic_block_data_t *block);
     void add_inst(const void *inst);
     void push_tmp_inst();
@@ -192,13 +202,14 @@ public:
     void *GenerateIR() const override;
 };
 
-// FuncDef   ::= FuncType IDENT "(" ")" Block;
+// FuncDef       ::= FuncType IDENT "(" [FuncFParams] ")" Block;
 class FuncDefAST : public BaseAST
 {
 public:
     std::unique_ptr<BaseAST> func_type;
     std::string ident;
     std::unique_ptr<BaseAST> block;
+    std::unique_ptr<std::vector<std::unique_ptr<BaseAST>>> func_fparam_list;
 
     void Dump() const override;
     void *GenerateIR() const override;
@@ -208,7 +219,23 @@ public:
 class FuncTypeAST : public BaseAST
 {
 public:
-    std::string func_type = "int";
+    enum
+    {
+        VOID,
+        INT
+    } type;
+
+    void Dump() const override;
+    void *GenerateIR() const override;
+};
+
+// FuncFParams   ::= FuncFParam {"," FuncFParam};
+// FuncFParam    ::= BType IDENT;
+class FuncFParamAST : public BaseAST
+{
+public:
+    std::unique_ptr<BaseAST> btype;
+    std::string ident;
 
     void Dump() const override;
     void *GenerateIR() const override;
@@ -502,14 +529,23 @@ public:
 };
 
 // UnaryExp    ::= PrimaryExp | UnaryOp UnaryExp;
+//                  | IDENT "(" [FuncRParams] ")";
 // UnaryOp :: = "+" | "-" | "!";
 class UnaryExpAST : public BaseAST
 {
 public:
-    std::int32_t type;
+    enum
+    {
+        PRIMARY,
+        UNARY,
+        FUNC
+    } type;
+
     std::string unary_op;
     std::unique_ptr<BaseAST> primary_exp;
     std::unique_ptr<BaseAST> unary_exp;
+    std::string ident;
+    std::unique_ptr<std::vector<std::unique_ptr<BaseAST>>> func_rparam_list;
 
     void Dump() const override;
     void *GenerateIR() const override;

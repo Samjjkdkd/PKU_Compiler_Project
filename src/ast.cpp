@@ -292,13 +292,24 @@ void *FuncDefAST::GenerateIR() const
     return ret;
 }
 
+void *FuncFParamAST::GenerateIR() const
+{
+#ifdef DEBUG
+    std::cout << "FuncFParam" << std::endl;
+#endif
+    return btype->GenerateIR();
+}
+
 void *FuncTypeAST::GenerateIR() const
 {
 #ifdef DEBUG
     std::cout << "FuncType" << std::endl;
 #endif
-    if (func_type == "int")
+    if (type == INT)
         return (void *)generate_type(KOOPA_RTT_INT32);
+    else if (type == VOID)
+        return (void *)generate_type(KOOPA_RTT_UNIT);
+    assert(0);
     return nullptr;
 }
 
@@ -446,23 +457,23 @@ void *StmtAST::GenerateIR() const
 #ifdef DEBUG
     std::cout << "Stmt" << std::endl;
 #endif
-    if (type == StmtAST::ASSIGN)
+    if (type == ASSIGN)
     {
         koopa_raw_value_t dest = (koopa_raw_value_t)symbol_table.get_value(lval->GetIdent()).data.var_value;
         koopa_raw_value_t value = (koopa_raw_value_t)exp->GenerateIR();
         koopa_raw_value_data_t *ret = generate_store_inst(dest, value);
         block_list.add_inst(ret);
     }
-    else if (type == StmtAST::EXP)
+    else if (type == EXP)
     {
         if (exp != nullptr)
             exp->GenerateIR();
     }
-    else if (type == StmtAST::BLOCK)
+    else if (type == BLOCK)
     {
         block->GenerateIR();
     }
-    else if (type == StmtAST::RETURN)
+    else if (type == RETURN)
     {
         koopa_raw_value_t value = nullptr;
         if (exp != nullptr)
@@ -470,7 +481,7 @@ void *StmtAST::GenerateIR() const
         koopa_raw_value_data_t *ret = generate_return_inst(value);
         block_list.add_inst(ret);
     }
-    else if (type == StmtAST::IF_ELSE)
+    else if (type == IF_ELSE)
     {
         // check_return 是因为有可能有if，else里面出现return导致后面的块不会执行的问题
         // rearrange_block_list 其实可以解决这个问题。但是这里还是加上了check_return
@@ -536,7 +547,7 @@ void *WhileExpAST::GenerateIR() const
 #ifdef DEBUG
     std::cout << "WhileExp" << std::endl;
 #endif
-    if (type == WhileExpAST::WHILE)
+    if (type == WHILE)
     {
         koopa_raw_basic_block_data_t *cond_block = generate_block("%cond");
         koopa_raw_basic_block_data_t *body_block = generate_block("%body");
@@ -558,7 +569,7 @@ void *WhileExpAST::GenerateIR() const
 
         loop_stack.del_loop();
     }
-    if (type == WhileExpAST::CONTINUE)
+    if (type == CONTINUE)
     {
         if (loop_stack.is_inside_loop())
         {
@@ -571,7 +582,7 @@ void *WhileExpAST::GenerateIR() const
             assert(0);
         }
     }
-    if (type == WhileExpAST::BREAK)
+    if (type == BREAK)
     {
         if (loop_stack.is_inside_loop())
         {
@@ -1165,36 +1176,55 @@ void FuncDefAST::Dump() const
 {
     std::cout << "FuncDef{";
     func_type->Dump();
-    std::cout << ident << "()";
+    std::cout << " " << ident << " (";
+    if (func_fparam_list->size() > 0)
+    {
+        (*(*func_fparam_list).begin())->Dump();
+        for (auto fparam = (*func_fparam_list).begin() + 1;
+             fparam != (*func_fparam_list).end(); fparam++)
+        {
+            std::cout << ",";
+            (*fparam)->Dump();
+        }
+    }
+    std::cout << ")";
     block->Dump();
+    std::cout << "}";
+}
+
+void FuncFParamAST::Dump() const
+{
+    std::cout << "FuncFParam{";
+    btype->Dump();
+    std::cout << " " << ident << " ";
     std::cout << "}";
 }
 
 void FuncTypeAST::Dump() const
 {
     std::cout << "FuncType{";
-    std::cout << func_type;
+    if (type == INT)
+    {
+        std::cout << " int ";
+    }
+    else if (type == VOID)
+    {
+        std::cout << " void ";
+    }
     std::cout << "}";
 }
 
 void BlockAST::Dump() const
 {
     std::cout << std::endl
-              << "Block{";
-    if (block_item_list == nullptr)
-    {
-        std::cout << "{}}";
-        return;
-    }
+              << "Block{ {";
     for (auto block_item = (*block_item_list).begin();
          block_item != (*block_item_list).end(); block_item++)
     {
-        std::cout << std::endl
-                  << "{";
+        std::cout << std::endl;
         (*block_item)->Dump();
-        std::cout << "}";
     }
-    std::cout << "}";
+    std::cout << "} }";
 }
 
 void BlockItemAST::Dump() const
@@ -1243,7 +1273,7 @@ void BTypeAST::Dump() const
 void ConstDefAST::Dump() const
 {
     std::cout << "ConstDef{";
-    std::cout << ident << "=";
+    std::cout << " " << ident << " =";
     const_init_val->Dump();
     std::cout << "}";
 }
@@ -1279,10 +1309,10 @@ void VarDeclAST::Dump() const
 void VarDefAST::Dump() const
 {
     std::cout << "VarDef{";
-    std::cout << ident;
+    std::cout << " " << ident << " ";
     if (type == 2)
     {
-        std::cout << "=";
+        std::cout << " = ";
         init_val->Dump();
     }
     std::cout << "}";
@@ -1299,31 +1329,31 @@ void StmtAST::Dump() const
 {
     std::cout << std::endl
               << "Stmt{";
-    if (type == StmtAST::ASSIGN)
+    if (type == ASSIGN)
     {
         lval->Dump();
         std::cout << "=";
         exp->Dump();
         std::cout << ";";
     }
-    else if (type == StmtAST::EXP)
+    else if (type == EXP)
     {
         if (exp != nullptr)
             exp->Dump();
         std::cout << ";";
     }
-    else if (type == StmtAST::BLOCK)
+    else if (type == BLOCK)
     {
         block->Dump();
     }
-    else if (type == StmtAST::RETURN)
+    else if (type == RETURN)
     {
-        std::cout << "return";
+        std::cout << " return ";
         if (exp != nullptr)
             exp->Dump();
         std::cout << ";";
     }
-    else if (type == StmtAST::IF_ELSE)
+    else if (type == IF_ELSE)
     {
         exp->Dump();
         if (stmt != nullptr)
@@ -1333,7 +1363,7 @@ void StmtAST::Dump() const
             stmt->Dump();
         }
     }
-    else if (type == StmtAST::WHILE)
+    else if (type == WHILE)
     {
         exp->Dump();
     }
@@ -1353,18 +1383,18 @@ void IfExpAST::Dump() const
 void WhileExpAST::Dump() const
 {
     std::cout << "WhileExp{";
-    if (type == WhileExpAST::WHILE)
+    if (type == WHILE)
     {
         std::cout << "while(";
         exp->Dump();
         std::cout << ")";
         stmt->Dump();
     }
-    else if (type == WhileExpAST::CONTINUE)
+    else if (type == CONTINUE)
     {
         std::cout << "continue;";
     }
-    else if (type == WhileExpAST::BREAK)
+    else if (type == BREAK)
     {
         std::cout << "break;";
     }
@@ -1374,7 +1404,7 @@ void WhileExpAST::Dump() const
 void LValAST::Dump() const
 {
     std::cout << "LVal{";
-    std::cout << ident;
+    std::cout << " " << ident << " ";
     std::cout << "}";
 }
 
@@ -1421,7 +1451,7 @@ void EqExpAST::Dump() const
     else
     {
         eq_exp->Dump();
-        std::cout << eq_op;
+        std::cout << " " << eq_op << " ";
         rel_exp->Dump();
     }
     std::cout << "}";
@@ -1435,7 +1465,7 @@ void RelExpAST::Dump() const
     else
     {
         rel_exp->Dump();
-        std::cout << rel_op;
+        std::cout << " " << rel_op << " ";
         add_exp->Dump();
     }
     std::cout << "}";
@@ -1449,7 +1479,7 @@ void AddExpAST::Dump() const
     else
     {
         add_exp->Dump();
-        std::cout << add_op;
+        std::cout << " " << add_op << " ";
         mul_exp->Dump();
     }
     std::cout << "}";
@@ -1463,7 +1493,7 @@ void MulExpAST::Dump() const
     else
     {
         mul_exp->Dump();
-        std::cout << mul_op;
+        std::cout << " " << mul_op << " ";
         unary_exp->Dump();
     }
     std::cout << "}";
@@ -1472,12 +1502,27 @@ void MulExpAST::Dump() const
 void UnaryExpAST::Dump() const
 {
     std::cout << "UnaryExp{";
-    if (type == 1)
+    if (type == PRIMARY)
         primary_exp->Dump();
-    else
+    else if (type == UNARY)
     {
-        std::cout << unary_op;
+        std::cout << " " << unary_op << " ";
         unary_exp->Dump();
+    }
+    else if (type == FUNC)
+    {
+        std::cout << " " << ident << " " << "(";
+        if (func_rparam_list->size() != 0)
+        {
+            (*(*func_rparam_list).begin())->Dump();
+            for (auto rparam = (*func_rparam_list).begin() + 1;
+                 rparam != (*func_rparam_list).end(); rparam++)
+            {
+                std::cout << ",";
+                (*rparam)->Dump();
+            }
+        }
+        std::cout << ")";
     }
     std::cout << "}";
 }
@@ -1494,6 +1539,6 @@ void PrimaryExpAST::Dump() const
     else if (type == 2)
         lval->Dump();
     else
-        std::cout << number;
+        std::cout << " " << number << " ";
     std::cout << "}";
 }
