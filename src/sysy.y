@@ -47,10 +47,10 @@ using namespace std;
 %nonassoc ELSE
 
 // 非终结符的类型定义
-%type <ast_val> FuncDef FuncType Block Stmt 
+%type <ast_val> FuncDef Type Block Stmt 
 %type <ast_val> Exp PrimaryExp UnaryExp MulExp AddExp
 %type <ast_val> RelExp EqExp LAndExp LOrExp
-%type <ast_val> Decl ConstDecl BType ConstDef ConstInitVal 
+%type <ast_val> Decl ConstDecl ConstDef ConstInitVal 
 %type <vec_val> ConstDefList BlockItemList VarDefList
 %type <vec_val> DefList FuncFParamList FuncRParamList
 %type <ast_val> BlockItem LVal ConstExp
@@ -90,8 +90,15 @@ DefList
   ;
 
 Def
-  : FuncDef {
+  : Decl {
     auto ast = new DefAST();
+    ast->type = DefAST::DECL;
+    ast->decl = unique_ptr<BaseAST>($1);
+    $$ = ast;
+  }
+  | FuncDef {
+    auto ast = new DefAST();
+    ast->type = DefAST::FUNC_DEF;
     ast->func_def = unique_ptr<BaseAST>($1);
     $$ = ast;
   }
@@ -109,12 +116,21 @@ Def
 // 这种写法会省下很多内存管理的负担
 
 FuncDef
-  : FuncType IDENT '(' FuncFParamList ')' Block {
+  : Type IDENT '(' FuncFParamList ')' Block {
     auto ast = new FuncDefAST();
     ast->func_type = unique_ptr<BaseAST>($1);
     ast->ident = *unique_ptr<string>($2);
     ast->func_fparam_list = unique_ptr<vector<unique_ptr<BaseAST> >>($4);
     ast->block = unique_ptr<BaseAST>($6);
+    $$ = ast;
+  }
+  | Type IDENT '(' ')' Block {
+    auto ast = new FuncDefAST();
+    ast->func_type = unique_ptr<BaseAST>($1);
+    ast->ident = *unique_ptr<string>($2);
+    auto vec = new vector<unique_ptr<BaseAST> >();
+    ast->func_fparam_list = unique_ptr<vector<unique_ptr<BaseAST> >>(vec);
+    ast->block = unique_ptr<BaseAST>($5);
     $$ = ast;
   }
   ;
@@ -130,13 +146,10 @@ FuncFParamList
     ast->push_back(unique_ptr<BaseAST>($3));
     $$ = ast;
   }
-  | {
-    $$ = new vector<unique_ptr<BaseAST> >();
-  }
   ;
 
 FuncFParam
-  : BType IDENT {
+  : Type IDENT {
     auto ast = new FuncFParamAST();
     ast->btype = unique_ptr<BaseAST>($1);
     ast->ident = *unique_ptr<string>($2);
@@ -144,15 +157,15 @@ FuncFParam
   }
   ;
 
-FuncType
+Type
   : INT {
-    auto ast = new FuncTypeAST();
-    ast->type = FuncTypeAST::INT;
+    auto ast = new TypeAST();
+    ast->type = TypeAST::INT;
     $$ = ast;
   }
   | VOID {
-    auto ast = new FuncTypeAST();
-    ast->type = FuncTypeAST::VOID;
+    auto ast = new TypeAST();
+    ast->type = TypeAST::VOID;
     $$ = ast;
   }
   ;
@@ -161,6 +174,12 @@ Block
   : '{' BlockItemList '}' {
     auto ast = new BlockAST();
     ast->block_item_list = unique_ptr<vector<unique_ptr<BaseAST> >>($2);
+    $$ = ast;
+  }
+  | '{' '}' {
+    auto ast = new BlockAST();
+    auto vec = new vector<unique_ptr<BaseAST> >();
+    ast->block_item_list = unique_ptr<vector<unique_ptr<BaseAST> >>(vec);
     $$ = ast;
   }
   ;
@@ -175,9 +194,6 @@ BlockItemList
     auto ast = static_cast<vector<unique_ptr<BaseAST> >*>($1);
     ast->push_back(unique_ptr<BaseAST>($2));
     $$ = ast;
-  }
-  | {
-    $$ = new vector<unique_ptr<BaseAST> >();
   }
   ;
 
@@ -212,17 +228,10 @@ Decl
   ;
 
 ConstDecl
-  : CONST BType ConstDefList ';' { 
+  : CONST Type ConstDefList ';' { 
     auto ast = new ConstDeclAST();
     ast->btype = unique_ptr<BaseAST>($2);
     ast->const_def_list = unique_ptr<vector<unique_ptr<BaseAST> >>($3);
-    $$ = ast;
-  }
-  ;
-
-BType
-  : INT {
-    auto ast = new BTypeAST();
     $$ = ast;
   }
   ;
@@ -266,7 +275,7 @@ ConstExp
   ;
 
 VarDecl
-  : BType VarDefList ';' {
+  : Type VarDefList ';' {
     auto ast = new VarDeclAST();
     ast->btype = unique_ptr<BaseAST>($1);
     ast->var_def_list = unique_ptr<vector<unique_ptr<BaseAST> >>($2);
@@ -572,6 +581,14 @@ UnaryExp
     ast->func_rparam_list = unique_ptr<vector<unique_ptr<BaseAST> >>($3);
     $$ = ast;
   }
+  | IDENT '(' ')' {
+    auto ast = new UnaryExpAST();
+    ast->type = UnaryExpAST::FUNC;
+    ast->ident = *unique_ptr<string>($1);
+    auto vec = new vector<unique_ptr<BaseAST> >();
+    ast->func_rparam_list = unique_ptr<vector<unique_ptr<BaseAST> >>(vec);
+    $$ = ast;
+  }
   ;
 
 FuncRParamList
@@ -584,9 +601,6 @@ FuncRParamList
     auto ast = static_cast<vector<unique_ptr<BaseAST> >*>($1);
     ast->push_back(unique_ptr<BaseAST>($3));
     $$ = ast;
-  } 
-  |{
-    $$ = new vector<unique_ptr<BaseAST> >();
   }
   ;
 

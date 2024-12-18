@@ -11,7 +11,7 @@
 
 #define DEBUG
 // CompUnit      ::= Def {Def};
-// Def           ::= FuncDef;
+// Def           ::= Decl | FuncDef;
 
 // FuncDef       ::= FuncType IDENT "(" [FuncFParams] ")" Block;
 
@@ -179,7 +179,12 @@ public:
     virtual void Dump() const = 0;
     virtual std::string GetIdent() const { return ""; };
     virtual std::int32_t CalculateValue() const { return 0; };
-    virtual void *GenerateIR() const { return nullptr; };
+    virtual void GenerateGlobalValues(std::vector<const void *> &vec) const { return; };
+    virtual void *GenerateIR_ret() const { return nullptr; };
+    virtual void GenerateIR_void() const { return; };
+    virtual void GenerateIR_void(koopa_raw_type_tag_t tag) const { return; };
+    virtual void GenerateIR_void(std::vector<const void *> &funcs, std::vector<const void *> &values) const { return; };
+    virtual void GenerateIR_void(std::vector<const void *> &funcs) const { return; };
 };
 
 // CompUnit  ::= Def {Def};
@@ -189,17 +194,24 @@ public:
     std::unique_ptr<std::vector<std::unique_ptr<BaseAST>>> def_list;
 
     void Dump() const override;
-    void *GenerateIR() const override;
+    void *GenerateIR_ret() const override;
+    void load_lib_funcs(std::vector<const void *> &funcs) const;
 };
 
-// Def       ::= FuncDef;
+// Def           ::= Decl | FuncDef;
 class DefAST : public BaseAST
 {
 public:
+    enum
+    {
+        DECL,
+        FUNC_DEF
+    } type;
     std::unique_ptr<BaseAST> func_def;
+    std::unique_ptr<BaseAST> decl;
 
     void Dump() const override;
-    void *GenerateIR() const override;
+    void GenerateIR_void(std::vector<const void *> &funcs, std::vector<const void *> &values) const override;
 };
 
 // FuncDef       ::= FuncType IDENT "(" [FuncFParams] ")" Block;
@@ -212,11 +224,11 @@ public:
     std::unique_ptr<std::vector<std::unique_ptr<BaseAST>>> func_fparam_list;
 
     void Dump() const override;
-    void *GenerateIR() const override;
+    void GenerateIR_void(std::vector<const void *> &vec) const override;
 };
 
-// FuncType  ::= "int";
-class FuncTypeAST : public BaseAST
+// FuncType  ::= "int" | "void";
+class TypeAST : public BaseAST
 {
 public:
     enum
@@ -226,7 +238,7 @@ public:
     } type;
 
     void Dump() const override;
-    void *GenerateIR() const override;
+    void *GenerateIR_ret() const override;
 };
 
 // FuncFParams   ::= FuncFParam {"," FuncFParam};
@@ -238,7 +250,7 @@ public:
     std::string ident;
 
     void Dump() const override;
-    void *GenerateIR() const override;
+    void *GenerateIR_ret() const override;
 };
 
 // Block       ::= "{" {BlockItem} "}";
@@ -248,7 +260,7 @@ public:
     std::unique_ptr<std::vector<std::unique_ptr<BaseAST>>> block_item_list;
 
     void Dump() const override;
-    void *GenerateIR() const override;
+    void GenerateIR_void() const override;
 };
 
 // BlockItem   ::= Decl | Stmt;
@@ -260,7 +272,7 @@ public:
     std::unique_ptr<BaseAST> stmt;
 
     void Dump() const override;
-    void *GenerateIR() const override;
+    void GenerateIR_void() const override;
 };
 
 // Decl          ::= ConstDecl | VarDecl;
@@ -272,7 +284,8 @@ public:
     std::unique_ptr<BaseAST> var_decl;
 
     void Dump() const override;
-    void *GenerateIR() const override;
+    void GenerateIR_void() const override;
+    void GenerateGlobalValues(std::vector<const void *> &values) const override;
 };
 
 // ConstDecl     ::= "const" BType ConstDef {"," ConstDef} ";";
@@ -283,18 +296,10 @@ public:
     std::unique_ptr<std::vector<std::unique_ptr<BaseAST>>> const_def_list;
 
     void Dump() const override;
-    void *GenerateIR() const override;
+    void GenerateIR_void() const override;
 };
 
 // BType         ::= "int";
-class BTypeAST : public BaseAST
-{
-public:
-    std::string btype = "int";
-
-    void Dump() const override;
-    void *GenerateIR() const override;
-};
 
 // ConstDef      ::= IDENT "=" ConstInitVal;
 class ConstDefAST : public BaseAST
@@ -304,7 +309,7 @@ public:
     std::unique_ptr<BaseAST> const_init_val;
 
     void Dump() const override;
-    void *GenerateIR() const override;
+    void GenerateIR_void() const override;
 };
 
 // ConstInitVal  ::= ConstExp;
@@ -314,7 +319,6 @@ public:
     std::unique_ptr<BaseAST> const_exp;
 
     void Dump() const override;
-    void *GenerateIR() const override;
     std::int32_t CalculateValue() const override;
 };
 
@@ -325,7 +329,6 @@ public:
     std::unique_ptr<BaseAST> exp;
 
     void Dump() const override;
-    void *GenerateIR() const override;
     std::int32_t CalculateValue() const override;
 };
 
@@ -337,7 +340,8 @@ public:
     std::unique_ptr<std::vector<std::unique_ptr<BaseAST>>> var_def_list;
 
     void Dump() const override;
-    void *GenerateIR() const override;
+    void GenerateIR_void() const override;
+    void GenerateGlobalValues(std::vector<const void *> &values) const override;
 };
 
 // VarDef        ::= IDENT | IDENT "=" InitVal;
@@ -349,7 +353,8 @@ public:
     std::unique_ptr<BaseAST> init_val;
 
     void Dump() const override;
-    void *GenerateIR() const override;
+    void GenerateIR_void(koopa_raw_type_tag_t tag) const override;
+    void GenerateGlobalValues(std::vector<const void *> &values) const override;
 };
 
 // InitVal       ::= Exp;
@@ -359,7 +364,7 @@ public:
     std::unique_ptr<BaseAST> exp;
 
     void Dump() const override;
-    void *GenerateIR() const override;
+    void *GenerateIR_ret() const override;
 };
 
 // Stmt          :: = LVal "=" Exp ";"
@@ -386,7 +391,7 @@ public:
     std::unique_ptr<BaseAST> stmt;
 
     void Dump() const override;
-    void *GenerateIR() const override;
+    void GenerateIR_void() const override;
 };
 
 // IfExp         ::= "if" "(" Exp ")" Stmt;
@@ -397,7 +402,7 @@ public:
     std::unique_ptr<BaseAST> stmt;
 
     void Dump() const override;
-    void *GenerateIR() const override;
+    void *GenerateIR_ret() const override;
 };
 
 // WhileExp      ::= "while" "(" Exp ")" Stmt;
@@ -416,7 +421,7 @@ public:
     std::unique_ptr<BaseAST> stmt;
 
     void Dump() const override;
-    void *GenerateIR() const override;
+    void GenerateIR_void() const override;
 };
 
 // LVal        ::= IDENT;
@@ -427,7 +432,7 @@ public:
 
     void Dump() const override;
     std::string GetIdent() const override;
-    void *GenerateIR() const override;
+    void *GenerateIR_ret() const override;
     std::int32_t CalculateValue() const override;
 };
 
@@ -438,7 +443,7 @@ public:
     std::unique_ptr<BaseAST> lor_exp;
 
     void Dump() const override;
-    void *GenerateIR() const override;
+    void *GenerateIR_ret() const override;
     std::int32_t CalculateValue() const override;
 };
 
@@ -451,7 +456,7 @@ public:
     std::unique_ptr<BaseAST> land_exp;
 
     void Dump() const override;
-    void *GenerateIR() const override;
+    void *GenerateIR_ret() const override;
     std::int32_t CalculateValue() const override;
 };
 
@@ -464,7 +469,7 @@ public:
     std::unique_ptr<BaseAST> eq_exp;
 
     void Dump() const override;
-    void *GenerateIR() const override;
+    void *GenerateIR_ret() const override;
     std::int32_t CalculateValue() const override;
 };
 
@@ -479,7 +484,7 @@ public:
     std::unique_ptr<BaseAST> rel_exp;
 
     void Dump() const override;
-    void *GenerateIR() const override;
+    void *GenerateIR_ret() const override;
     std::int32_t CalculateValue() const override;
 };
 
@@ -494,7 +499,7 @@ public:
     std::unique_ptr<BaseAST> add_exp;
 
     void Dump() const override;
-    void *GenerateIR() const override;
+    void *GenerateIR_ret() const override;
     std::int32_t CalculateValue() const override;
 };
 
@@ -509,7 +514,7 @@ public:
     std::unique_ptr<BaseAST> mul_exp;
 
     void Dump() const override;
-    void *GenerateIR() const override;
+    void *GenerateIR_ret() const override;
     std::int32_t CalculateValue() const override;
 };
 
@@ -524,7 +529,7 @@ public:
     std::unique_ptr<BaseAST> unary_exp;
 
     void Dump() const override;
-    void *GenerateIR() const override;
+    void *GenerateIR_ret() const override;
     std::int32_t CalculateValue() const override;
 };
 
@@ -548,7 +553,7 @@ public:
     std::unique_ptr<std::vector<std::unique_ptr<BaseAST>>> func_rparam_list;
 
     void Dump() const override;
-    void *GenerateIR() const override;
+    void *GenerateIR_ret() const override;
     std::int32_t CalculateValue() const override;
 };
 
@@ -562,7 +567,7 @@ public:
     std::int32_t number;
 
     void Dump() const override;
-    void *GenerateIR() const override;
+    void *GenerateIR_ret() const override;
     std::int32_t CalculateValue() const override;
 };
 
@@ -581,9 +586,11 @@ koopa_raw_type_t generate_type(koopa_raw_type_tag_t tag);
 koopa_raw_type_t generate_type(koopa_raw_type_tag_t tag, koopa_raw_type_tag_t base);
 koopa_raw_value_data_t *generate_number(int32_t number);
 koopa_raw_value_data_t *generate_func_arg_ref(koopa_raw_type_t ty, std::string ident);
-koopa_raw_function_data_t *generate_function(std::string ident, std::vector<const void *> &params, const struct koopa_raw_type_kind *func_type);
+koopa_raw_function_data_t *generate_function_decl(std::string ident, std::vector<const void *> &params_ty, koopa_raw_type_t func_type);
+koopa_raw_function_data_t *generate_function(std::string ident, std::vector<const void *> &params, koopa_raw_type_t func_type);
 koopa_raw_basic_block_data_t *generate_block(const char *name);
-koopa_raw_value_data_t *generate_alloc_inst(std::string ident);
+koopa_raw_value_data_t *generate_global_alloc(std::string ident, koopa_raw_value_t value);
+koopa_raw_value_data_t *generate_alloc_inst(std::string ident, koopa_raw_type_tag_t tag);
 koopa_raw_value_data_t *generate_store_inst(koopa_raw_value_t dest, koopa_raw_value_t value);
 koopa_raw_value_data_t *generate_load_inst(koopa_raw_value_t src);
 koopa_raw_value_data_t *generate_binary_inst(koopa_raw_value_t lhs, koopa_raw_value_t rhs, koopa_raw_binary_op_t op);

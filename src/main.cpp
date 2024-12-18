@@ -48,7 +48,7 @@ int main(int argc, const char *argv[])
     return 0;
   }
   // 生成 IR
-  koopa_raw_program_t raw = *(koopa_raw_program_t *)ast->GenerateIR();
+  koopa_raw_program_t raw = *(koopa_raw_program_t *)ast->GenerateIR_ret();
   koopa_program_t program;
   koopa_error_code_t error = koopa_generate_raw_to_koopa(&raw, &program);
   if (error != KOOPA_EC_SUCCESS)
