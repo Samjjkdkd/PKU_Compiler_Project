@@ -3,6 +3,8 @@
 #include <memory>
 #include <cassert>
 #include <iostream>
+#include <algorithm>
+#include <string.h>
 #include "koopa.h"
 
 /**********************************************************************************************************/
@@ -72,12 +74,21 @@ void Visit(const koopa_raw_branch_t &branch);
 // 访问 jump 指令
 void Visit(const koopa_raw_jump_t &jump);
 
+// 访问 call 指令
+void Visit(const koopa_raw_call_t &call, const koopa_raw_value_t &value);
+
+// 访问 global_alloc 指令
+void Visit(const koopa_raw_global_alloc_t &global_alloc, const koopa_raw_value_t &value);
+
 /**********************************************************************************************************/
 /************************************************Utils*****************************************************/
 /**********************************************************************************************************/
 
 // 将 value 加载到 reg 中
 void load_reg(const koopa_raw_value_t &value, std::string reg);
+
+// 将 reg 中的值存回 value
+void save_reg(const koopa_raw_value_t &value, std::string reg);
 
 // 处理偏移量超出范围
 void deal_offset_exceed(int offset, std::string inst, std::string reg);

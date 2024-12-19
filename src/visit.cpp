@@ -25,6 +25,9 @@ void Stack::init()
 /************************************************Visit*****************************************************/
 /**********************************************************************************************************/
 
+// 记录ra是否被使用
+static int ra_count = 0;
+
 // 访问 raw program
 void Visit(const koopa_raw_program_t &program)
 {
@@ -68,6 +71,10 @@ void Visit(const koopa_raw_slice_t &slice)
 // 访问函数
 void Visit(const koopa_raw_function_t &func)
 {
+    if (func->bbs.len == 0)
+    {
+        return;
+    }
     // 执行一些其他的必要操作
     std::cout << "  .text" << std::endl;
     std::cout << "  .globl " << func->name + 1 << std::endl;
@@ -76,6 +83,9 @@ void Visit(const koopa_raw_function_t &func)
     // 初始化栈帧
     stack.init();
 
+    int var_count = 0;
+    ra_count = 0;
+    int arg_count = 0;
     // 计算栈帧大小
     for (size_t i = 0; i < func->bbs.len; ++i)
     {
@@ -86,22 +96,33 @@ void Visit(const koopa_raw_function_t &func)
             // 把所有变量都放在栈上
             if (inst->ty->tag != KOOPA_RTT_UNIT)
             {
-                stack.len += 4;
+                var_count++;
+            }
+            if (inst->kind.tag == KOOPA_RVT_CALL)
+            {
+                ra_count = 1;
+                arg_count =
+                    std::max(arg_count, std::max(0, (int)inst->kind.data.call.args.len - 8));
             }
         }
     }
-
+    stack.len = (var_count + ra_count + arg_count) * 4;
     // 将栈帧长度对齐到16字节
     stack.len = (stack.len + 15) / 16 * 16;
-
+    stack.pos = arg_count * 4;
     // 分配栈帧
     // addi 指令中立即数的范围是 -2048 到 2047
     if (stack.len != 0)
     {
         deal_offset_exceed(stack.len, "addi-", "t0");
     }
+    if (ra_count)
+    {
+        deal_offset_exceed(stack.len - 4, "sw", "ra");
+    }
     // 访问所有基本块
     Visit(func->bbs);
+    std::cout << std::endl;
 }
 
 // 访问基本块
@@ -110,7 +131,10 @@ void Visit(const koopa_raw_basic_block_t &bb)
     // 执行一些其他的必要操作
     // ...
     // 访问所有指令
-    std::cout << bb->name + 1 << ":" << std::endl;
+    if (strncmp(bb->name + 1, "entry", 5) != 0)
+    {
+        std::cout << bb->name + 1 << ":" << std::endl;
+    }
     Visit(bb->insts);
 }
 
@@ -138,6 +162,10 @@ void Visit(const koopa_raw_value_t &value)
         stack.alloc_value(value, stack.pos);
         stack.pos += 4;
         break;
+    case KOOPA_RVT_GLOBAL_ALLOC:
+        // 全局变量分配
+        Visit(kind.data.global_alloc, value);
+        break;
     case KOOPA_RVT_LOAD:
         // 访问 load 指令
         Visit(kind.data.load, value);
@@ -152,6 +180,9 @@ void Visit(const koopa_raw_value_t &value)
     case KOOPA_RVT_JUMP:
         Visit(kind.data.jump);
         break;
+    case KOOPA_RVT_CALL:
+        Visit(kind.data.call, value);
+        break;
     default:
         // 其他类型暂时遇不到
         std::cout << kind.tag << std::endl;
@@ -163,7 +194,15 @@ void Visit(const koopa_raw_value_t &value)
 void Visit(const koopa_raw_return_t &value)
 {
     // 访问返回值
-    load_reg(value.value, "a0");
+    if (value.value != nullptr)
+    {
+        load_reg(value.value, "a0");
+    }
+    // 恢复ra
+    if (ra_count)
+    {
+        deal_offset_exceed(stack.len - 4, "lw", "ra");
+    }
     // 恢复栈帧
     if (stack.len != 0)
     {
@@ -246,10 +285,12 @@ void Visit(const koopa_raw_binary_t &binary, const koopa_raw_value_t &value)
     }
 
     // 将结果存回
-    stack.alloc_value(value, stack.pos);
-    stack.pos += 4;
-    int offset = stack.get_loc(value);
-    deal_offset_exceed(offset, "sw", "t0");
+    if (value->ty->tag != KOOPA_RTT_UNIT)
+    {
+        stack.alloc_value(value, stack.pos);
+        stack.pos += 4;
+        save_reg(value, "t0");
+    }
 }
 
 // 访问 load 指令
@@ -258,10 +299,12 @@ void Visit(const koopa_raw_load_t &load, const koopa_raw_value_t &value)
     load_reg(load.src, "t0");
 
     // 将结果存回
-    stack.alloc_value(value, stack.pos);
-    stack.pos += 4;
-    int offset = stack.get_loc(value);
-    deal_offset_exceed(offset, "sw", "t0");
+    if (value->ty->tag != KOOPA_RTT_UNIT)
+    {
+        stack.alloc_value(value, stack.pos);
+        stack.pos += 4;
+        save_reg(value, "t0");
+    }
 }
 
 // 访问 store 指令
@@ -270,8 +313,7 @@ void Visit(const koopa_raw_store_t &value)
     load_reg(value.value, "t0");
 
     // 将结果存回
-    int offset = stack.get_loc(value.dest);
-    deal_offset_exceed(offset, "sw", "t0");
+    save_reg(value.dest, "t0");
 }
 
 // 访问 branch 指令
@@ -282,9 +324,54 @@ void Visit(const koopa_raw_branch_t &branch)
     std::cout << "  j " << branch.false_bb->name + 1 << std::endl;
 }
 
+// 访问 jump 指令
 void Visit(const koopa_raw_jump_t &jump)
 {
     std::cout << "  j " << jump.target->name + 1 << std::endl;
+}
+
+// 访问 call 指令
+void Visit(const koopa_raw_call_t &call, const koopa_raw_value_t &value)
+{
+    for (size_t i = 0; i < call.args.len; ++i)
+    {
+        auto arg = reinterpret_cast<koopa_raw_value_t>(call.args.buffer[i]);
+        if (i < 8)
+        {
+            load_reg(arg, "a" + std::to_string(i));
+        }
+        else
+        {
+            load_reg(arg, "t0");
+            deal_offset_exceed((i - 8) * 4, "sw", "t0");
+        }
+    }
+    std::cout << "  call " << call.callee->name + 1 << std::endl;
+
+    // 将结果存回
+    if (value->ty->tag != KOOPA_RTT_UNIT)
+    {
+        stack.alloc_value(value, stack.pos);
+        stack.pos += 4;
+        save_reg(value, "a0");
+    }
+}
+
+// 访问 global_alloc 指令
+void Visit(const koopa_raw_global_alloc_t &global_alloc, const koopa_raw_value_t &value)
+{
+    std::cout << "  .data" << std::endl;
+    std::cout << "  .globl " << value->name + 1 << std::endl;
+    std::cout << value->name + 1 << ":" << std::endl;
+    if (global_alloc.init->kind.tag == KOOPA_RVT_ZERO_INIT)
+    {
+        std::cout << "  .zero 4" << std::endl;
+    }
+    else if (global_alloc.init->kind.tag == KOOPA_RVT_INTEGER)
+    {
+        std::cout << "  .word " << global_alloc.init->kind.data.integer.value << std::endl;
+    }
+    std::cout << std::endl;
 }
 
 /**********************************************************************************************************/
@@ -294,6 +381,7 @@ void Visit(const koopa_raw_jump_t &jump)
 void load_reg(const koopa_raw_value_t &value, std::string reg)
 {
     int offset = 0;
+    size_t index = 0;
     switch (value->kind.tag)
     {
     case KOOPA_RVT_INTEGER:
@@ -302,11 +390,44 @@ void load_reg(const koopa_raw_value_t &value, std::string reg)
     case KOOPA_RVT_ALLOC:
     case KOOPA_RVT_LOAD:
     case KOOPA_RVT_BINARY:
+    case KOOPA_RVT_CALL:
         offset = stack.get_loc(value);
         deal_offset_exceed(offset, "lw", reg);
         break;
-    default:
+    case KOOPA_RVT_FUNC_ARG_REF:
+        index = value->kind.data.func_arg_ref.index;
+        if (index < 8)
+        {
+            std::cout << "  mv " << reg << ", a" << index << std::endl;
+        }
+        else
+        {
+            deal_offset_exceed(stack.len + (index - 8) * 4, "lw", reg);
+        }
         break;
+    case KOOPA_RVT_GLOBAL_ALLOC:
+        std::cout << "  la t1, " << value->name + 1 << std::endl;
+        std::cout << "  lw " << reg << ", 0(t1)" << std::endl;
+        break;
+    default:
+        assert(false);
+        break;
+    }
+}
+
+void save_reg(const koopa_raw_value_t &value, std::string reg)
+{
+    assert(value->kind.tag != KOOPA_RVT_INTEGER);
+    if (value->kind.tag == KOOPA_RVT_GLOBAL_ALLOC)
+    {
+        std::cout << "  la t1, " << value->name + 1 << std::endl;
+        std::cout << "  sw " << reg << ", 0(t1)" << std::endl;
+        return;
+    }
+    else
+    {
+        int offset = stack.get_loc(value);
+        deal_offset_exceed(offset, "sw", reg);
     }
 }
 
@@ -322,7 +443,7 @@ void deal_offset_exceed(int offset, std::string inst, std::string reg)
             if (new_base_offset < -2048 || new_base_offset > 2047)
             {
                 std::cout << "  li t1, " << new_base_offset << std::endl;
-                std::cout << "  add t1, sp, t1" << std::endl;
+                std::cout << "  add t1, t1, sp" << std::endl;
             }
             else
             {

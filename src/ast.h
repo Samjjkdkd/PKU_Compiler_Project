@@ -9,9 +9,10 @@
 #include <unordered_map>
 #include "koopa.h"
 
-#define DEBUG
-// CompUnit      ::= Def {Def};
-// Def           ::= Decl | FuncDef;
+// #define DEBUG
+
+//  CompUnit      ::= Def {Def};
+//  Def           ::= Decl | FuncDef;
 
 // FuncDef       ::= FuncType IDENT "(" [FuncFParams] ")" Block;
 
@@ -180,6 +181,7 @@ public:
     virtual std::string GetIdent() const { return ""; };
     virtual std::int32_t CalculateValue() const { return 0; };
     virtual void GenerateGlobalValues(std::vector<const void *> &vec) const { return; };
+    virtual void GenerateGlobalValues(std::vector<const void *> &values, koopa_raw_type_tag_t tag) const { return; };
     virtual void *GenerateIR_ret() const { return nullptr; };
     virtual void GenerateIR_void() const { return; };
     virtual void GenerateIR_void(koopa_raw_type_tag_t tag) const { return; };
@@ -354,7 +356,7 @@ public:
 
     void Dump() const override;
     void GenerateIR_void(koopa_raw_type_tag_t tag) const override;
-    void GenerateGlobalValues(std::vector<const void *> &values) const override;
+    void GenerateGlobalValues(std::vector<const void *> &values, koopa_raw_type_tag_t tag) const override;
 };
 
 // InitVal       ::= Exp;
@@ -589,7 +591,7 @@ koopa_raw_value_data_t *generate_func_arg_ref(koopa_raw_type_t ty, std::string i
 koopa_raw_function_data_t *generate_function_decl(std::string ident, std::vector<const void *> &params_ty, koopa_raw_type_t func_type);
 koopa_raw_function_data_t *generate_function(std::string ident, std::vector<const void *> &params, koopa_raw_type_t func_type);
 koopa_raw_basic_block_data_t *generate_block(const char *name);
-koopa_raw_value_data_t *generate_global_alloc(std::string ident, koopa_raw_value_t value);
+koopa_raw_value_data_t *generate_global_alloc(std::string ident, koopa_raw_value_t value, koopa_raw_type_tag_t tag);
 koopa_raw_value_data_t *generate_alloc_inst(std::string ident, koopa_raw_type_tag_t tag);
 koopa_raw_value_data_t *generate_store_inst(koopa_raw_value_t dest, koopa_raw_value_t value);
 koopa_raw_value_data_t *generate_load_inst(koopa_raw_value_t src);
