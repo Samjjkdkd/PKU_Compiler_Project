@@ -587,6 +587,7 @@ koopa_raw_slice_t generate_slice(const void *data,
 koopa_raw_type_t generate_type(koopa_raw_type_tag_t tag);
 koopa_raw_type_t generate_type(koopa_raw_type_tag_t tag, koopa_raw_type_tag_t base);
 koopa_raw_value_data_t *generate_number(int32_t number);
+koopa_raw_value_data_t *generate_zero_init(koopa_raw_type_tag_t tag);
 koopa_raw_value_data_t *generate_func_arg_ref(koopa_raw_type_t ty, std::string ident);
 koopa_raw_function_data_t *generate_function_decl(std::string ident, std::vector<const void *> &params_ty, koopa_raw_type_t func_type);
 koopa_raw_function_data_t *generate_function(std::string ident, std::vector<const void *> &params, koopa_raw_type_t func_type);

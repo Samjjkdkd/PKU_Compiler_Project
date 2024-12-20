@@ -1102,7 +1102,7 @@ void VarDefAST::GenerateGlobalValues(std::vector<const void *> &values, koopa_ra
     }
     else
     {
-        value = (koopa_raw_value_t)generate_number(0);
+        value = (koopa_raw_value_t)generate_zero_init(tag);
     }
     koopa_raw_value_data_t *ret = generate_global_alloc(ident, value, tag);
 
@@ -1240,6 +1240,16 @@ koopa_raw_value_data_t *generate_number(int32_t number)
     ret->used_by = generate_slice(KOOPA_RSIK_VALUE);
     ret->kind.tag = KOOPA_RVT_INTEGER;
     ret->kind.data.integer.value = number;
+    return ret;
+}
+
+koopa_raw_value_data_t *generate_zero_init(koopa_raw_type_tag_t tag)
+{
+    koopa_raw_value_data_t *ret = new koopa_raw_value_data();
+    ret->ty = generate_type(tag);
+    ret->name = nullptr;
+    ret->used_by = generate_slice(KOOPA_RSIK_VALUE);
+    ret->kind.tag = KOOPA_RVT_ZERO_INIT;
     return ret;
 }
 

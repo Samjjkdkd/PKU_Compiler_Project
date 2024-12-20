@@ -106,6 +106,7 @@ void Visit(const koopa_raw_function_t &func)
             }
         }
     }
+    // std::cout << func->name + 1 << " " << var_count << " " << ra_count << " " << arg_count << std::endl;
     stack.len = (var_count + ra_count + arg_count) * 4;
     // 将栈帧长度对齐到16字节
     stack.len = (stack.len + 15) / 16 * 16;
