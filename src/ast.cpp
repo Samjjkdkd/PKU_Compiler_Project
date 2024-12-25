@@ -478,28 +478,28 @@ void ConstDefAST::GenerateIR_void(koopa_raw_type_tag_t tag) const
     if (type == ARRAY)
     {
         size_t size = const_exp->CalculateValue();
-        koopa_raw_value_data_t *ret = generate_alloc_inst(ident, generate_type_array(generate_type(tag), size));
-        symbol_table.add_symbol(ident, SymbolTable::Value(SymbolTable::Value::Array, (koopa_raw_value_t)ret));
-        block_list.add_inst(ret);
 
         std::vector<const void *> init_vec;
         const_init_val->GenerateIR_void(init_vec);
-        for (int i = 0; i < size; i++)
+        koopa_raw_value_t init;
+        if (init_vec.size() == 0)
         {
-            koopa_raw_value_data_t *get = generate_getelemptr_inst(ret, generate_number(i));
-            koopa_raw_value_t init;
-            if (i < init_vec.size())
-            {
-                init = (koopa_raw_value_t)init_vec[i];
-            }
-            else
-            {
-                init = generate_number(0);
-            }
-            koopa_raw_value_data_t *store = generate_store_inst(get, init);
-            block_list.add_inst(get);
-            block_list.add_inst(store);
+            init = generate_zero_init(generate_type_array(generate_type(tag), size));
         }
+        else
+        {
+            for (int i = init_vec.size(); i < size; i++)
+            {
+                init_vec.push_back(generate_number(0));
+            }
+            koopa_raw_slice_t elements = generate_slice(init_vec, KOOPA_RSIK_VALUE);
+            init = generate_aggregate(generate_type(tag), elements);
+        }
+        koopa_raw_value_data_t *ret = generate_alloc_inst(ident, generate_type_array(generate_type(tag), size));
+        symbol_table.add_symbol(ident, SymbolTable::Value(SymbolTable::Value::Array, (koopa_raw_value_t)ret));
+        block_list.add_inst(ret);
+        koopa_raw_value_data_t *store = generate_store_inst((koopa_raw_value_t)ret, init);
+        block_list.add_inst(store);
         return;
     }
 }
@@ -556,30 +556,32 @@ void VarDefAST::GenerateIR_void(koopa_raw_type_tag_t tag) const
     if (type == ARRAY)
     {
         size_t size = const_exp->CalculateValue();
+
         std::vector<const void *> init_vec;
+        koopa_raw_value_t init;
         if (is_init)
         {
             init_val->GenerateIR_void(init_vec);
         }
+        if (init_vec.size() == 0)
+        {
+            init = generate_zero_init(generate_type_array(generate_type(tag), size));
+        }
+        else
+        {
+            for (int i = init_vec.size(); i < size; i++)
+            {
+                init_vec.push_back(generate_number(0));
+            }
+            koopa_raw_slice_t elements = generate_slice(init_vec, KOOPA_RSIK_VALUE);
+            init = generate_aggregate(generate_type(tag), elements);
+        }
+
         koopa_raw_value_data_t *ret = generate_alloc_inst(ident, generate_type_array(generate_type(tag), size));
         symbol_table.add_symbol(ident, SymbolTable::Value(SymbolTable::Value::Array, (koopa_raw_value_t)ret));
         block_list.add_inst(ret);
-        for (int i = 0; i < size; i++)
-        {
-            koopa_raw_value_data_t *get = generate_getelemptr_inst(ret, generate_number(i));
-            koopa_raw_value_t init;
-            if (i < init_vec.size())
-            {
-                init = (koopa_raw_value_t)init_vec[i];
-            }
-            else
-            {
-                init = generate_number(0);
-            }
-            koopa_raw_value_data_t *store = generate_store_inst(get, init);
-            block_list.add_inst(get);
-            block_list.add_inst(store);
-        }
+        koopa_raw_value_data_t *store = generate_store_inst((koopa_raw_value_t)ret, init);
+        block_list.add_inst(store);
         return;
     }
 }
@@ -1209,12 +1211,16 @@ void ConstDefAST::GenerateGlobalValues(std::vector<const void *> &values, koopa_
         koopa_raw_value_t init;
         if (init_vec.size() == 0)
         {
-            init = generate_zero_init(tag);
+            init = generate_zero_init(generate_type_array(generate_type(tag), size));
         }
         else
         {
+            for (int i = init_vec.size(); i < size; i++)
+            {
+                init_vec.push_back(generate_number(0));
+            }
             koopa_raw_slice_t elements = generate_slice(init_vec, KOOPA_RSIK_VALUE);
-            init = generate_aggregate(tag, elements);
+            init = generate_aggregate(generate_type(tag), elements);
         }
         koopa_raw_value_data_t *ret = generate_global_alloc(ident, init, generate_type_array(generate_type(tag), size));
         symbol_table.add_symbol(ident, SymbolTable::Value(SymbolTable::Value::Array, (koopa_raw_value_t)ret));
@@ -1255,7 +1261,7 @@ void VarDefAST::GenerateGlobalValues(std::vector<const void *> &values, koopa_ra
         }
         else
         {
-            value = (koopa_raw_value_t)generate_zero_init(tag);
+            value = (koopa_raw_value_t)generate_zero_init(generate_type(tag));
         }
         koopa_raw_value_data_t *ret = generate_global_alloc(ident, value, generate_type(tag));
 
@@ -1266,23 +1272,23 @@ void VarDefAST::GenerateGlobalValues(std::vector<const void *> &values, koopa_ra
     {
         size_t size = const_exp->CalculateValue();
         koopa_raw_value_t init;
+        std::vector<const void *> init_vec;
         if (is_init)
         {
-            std::vector<const void *> init_vec;
             init_val->GenerateIR_void(init_vec);
-            if (init_vec.size() == 0)
-            {
-                init = generate_zero_init(tag);
-            }
-            else
-            {
-                koopa_raw_slice_t elements = generate_slice(init_vec, KOOPA_RSIK_VALUE);
-                init = generate_aggregate(tag, elements);
-            }
+        }
+        if (init_vec.size() == 0)
+        {
+            init = generate_zero_init(generate_type_array(generate_type(tag), size));
         }
         else
         {
-            init = generate_zero_init(tag);
+            for (int i = init_vec.size(); i < size; i++)
+            {
+                init_vec.push_back(generate_number(0));
+            }
+            koopa_raw_slice_t elements = generate_slice(init_vec, KOOPA_RSIK_VALUE);
+            init = generate_aggregate(generate_type(tag), elements);
         }
         koopa_raw_value_data_t *ret = generate_global_alloc(ident, init, generate_type_array(generate_type(tag), size));
         symbol_table.add_symbol(ident, SymbolTable::Value(SymbolTable::Value::Array, (koopa_raw_value_t)ret));
@@ -1453,20 +1459,20 @@ koopa_raw_value_data_t *generate_number(int32_t number)
     return ret;
 }
 
-koopa_raw_value_data_t *generate_zero_init(koopa_raw_type_tag_t tag)
+koopa_raw_value_data_t *generate_zero_init(koopa_raw_type_t type)
 {
     koopa_raw_value_data_t *ret = new koopa_raw_value_data();
-    ret->ty = generate_type(tag);
+    ret->ty = type;
     ret->name = nullptr;
     ret->used_by = generate_slice(KOOPA_RSIK_VALUE);
     ret->kind.tag = KOOPA_RVT_ZERO_INIT;
     return ret;
 }
 
-koopa_raw_value_data_t *generate_aggregate(koopa_raw_type_tag_t tag, koopa_raw_slice_t elements)
+koopa_raw_value_data_t *generate_aggregate(koopa_raw_type_t type, koopa_raw_slice_t elements)
 {
     koopa_raw_value_data *ret = new koopa_raw_value_data();
-    ret->ty = generate_type(tag);
+    ret->ty = type;
     ret->name = nullptr;
     ret->used_by = generate_slice(KOOPA_RSIK_VALUE);
     ret->kind.tag = KOOPA_RVT_AGGREGATE;
