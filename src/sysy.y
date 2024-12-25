@@ -253,14 +253,14 @@ ConstDefList
 ConstDef
   : IDENT '=' ConstInitVal {
     auto ast = new ConstDefAST();
-    ast->is_array = false;
+    ast->type = ConstDefAST::INT;
     ast->ident = *unique_ptr<string>($1);
     ast->const_init_val = unique_ptr<BaseAST>($3);
     $$ = ast;
   }
   | IDENT '[' ConstExp ']' '=' ConstInitVal {
     auto ast = new ConstDefAST();
-    ast->is_array = true;
+    ast->type = ConstDefAST::ARRAY;
     ast->ident = *unique_ptr<string>($1);
     ast->const_exp = unique_ptr<BaseAST>($3);
     ast->const_init_val = unique_ptr<BaseAST>($6);
@@ -336,14 +336,14 @@ VarDefList
 VarDef
   : IDENT{
     auto ast = new VarDefAST();
-    ast->is_array = false;
+    ast->type = VarDefAST::INT;
     ast->is_init = false;
     ast->ident = *unique_ptr<string>($1);
     $$ = ast;
   }
   | IDENT '=' InitVal {
     auto ast = new VarDefAST();
-    ast->is_array = false;
+    ast->type = VarDefAST::INT;
     ast->is_init = true;
     ast->ident = *unique_ptr<string>($1);
     ast->init_val = unique_ptr<BaseAST>($3);
@@ -351,7 +351,7 @@ VarDef
   }
   | IDENT '[' ConstExp ']' {
     auto ast = new VarDefAST();
-    ast->is_array = true;
+    ast->type = VarDefAST::ARRAY;
     ast->is_init = false;
     ast->ident = *unique_ptr<string>($1);
     ast->const_exp = unique_ptr<BaseAST>($3);
@@ -359,7 +359,7 @@ VarDef
   }
   | IDENT '[' ConstExp ']' '=' InitVal  {
     auto ast = new VarDefAST();
-    ast->is_array = true;
+    ast->type = VarDefAST::ARRAY;
     ast->is_init = true;
     ast->ident = *unique_ptr<string>($1);
     ast->const_exp = unique_ptr<BaseAST>($3);

@@ -84,13 +84,15 @@ public:
         {
             Var,
             Const,
-            Func
+            Func,
+            Array
         } type;
         union Data
         {
             int const_value;
             koopa_raw_value_t var_value;
             koopa_raw_function_t func_value;
+            koopa_raw_value_t array_value;
         } data;
         Value() = default;
         Value(ValueType type, int value) : type(type)
@@ -100,8 +102,14 @@ public:
         };
         Value(ValueType type, koopa_raw_value_t value) : type(type)
         {
-            assert(type == Var);
-            data.var_value = value;
+            if (type == Var)
+            {
+                data.var_value = value;
+            }
+            else if (type == Array)
+            {
+                data.array_value = value;
+            }
         };
         Value(ValueType type, koopa_raw_function_t value) : type(type)
         {
@@ -179,7 +187,7 @@ class BaseAST
 public:
     virtual ~BaseAST() = default;
     virtual void Dump() const = 0;
-    virtual std::string GetIdent() const { return ""; };
+    virtual void *GetLeftValue() const { return nullptr; };
     virtual std::int32_t CalculateValue() const { return 0; };
     virtual void GenerateGlobalValues(std::vector<const void *> &vec) const { return; };
     virtual void GenerateGlobalValues(std::vector<const void *> &values, koopa_raw_type_tag_t tag) const { return; };
@@ -300,6 +308,7 @@ public:
 
     void Dump() const override;
     void GenerateIR_void() const override;
+    void GenerateGlobalValues(std::vector<const void *> &values) const override;
 };
 
 // BType         ::= "int";
@@ -308,13 +317,18 @@ public:
 class ConstDefAST : public BaseAST
 {
 public:
-    bool is_array;
+    enum
+    {
+        INT,
+        ARRAY
+    } type;
     std::string ident;
     std::unique_ptr<BaseAST> const_exp;
     std::unique_ptr<BaseAST> const_init_val;
 
     void Dump() const override;
-    void GenerateIR_void() const override;
+    void GenerateIR_void(koopa_raw_type_tag_t tag) const override;
+    void GenerateGlobalValues(std::vector<const void *> &values, koopa_raw_type_tag_t tag) const override;
 };
 
 // ConstInitVal :: = ConstExp | "{"[ConstExp{"," ConstExp}] "}";
@@ -331,6 +345,7 @@ public:
 
     void Dump() const override;
     std::int32_t CalculateValue() const override;
+    void GenerateIR_void(std::vector<const void *> &init_vec) const override;
 };
 
 // ConstExp    ::= Exp;
@@ -359,7 +374,11 @@ public:
 class VarDefAST : public BaseAST
 {
 public:
-    bool is_array;
+    enum
+    {
+        INT,
+        ARRAY
+    } type;
     bool is_init;
     std::string ident;
     std::unique_ptr<BaseAST> init_val;
@@ -384,6 +403,7 @@ public:
 
     void Dump() const override;
     void *GenerateIR_ret() const override;
+    void GenerateIR_void(std::vector<const void *> &init_vec) const override;
 };
 
 // Stmt          :: = LVal "=" Exp ";"
@@ -456,7 +476,7 @@ public:
     std::unique_ptr<BaseAST> exp;
 
     void Dump() const override;
-    std::string GetIdent() const override;
+    void *GetLeftValue() const override;
     void *GenerateIR_ret() const override;
     std::int32_t CalculateValue() const override;
 };
@@ -608,15 +628,19 @@ koopa_raw_slice_t generate_slice(std::vector<const void *> &vec,
 koopa_raw_slice_t generate_slice(const void *data,
                                  koopa_raw_slice_item_kind_t kind = KOOPA_RSIK_UNKNOWN);
 koopa_raw_type_t generate_type(koopa_raw_type_tag_t tag);
-koopa_raw_type_t generate_type(koopa_raw_type_tag_t tag, koopa_raw_type_tag_t base);
+koopa_raw_type_t generate_type_pointer(koopa_raw_type_t base);
+koopa_raw_type_t generate_type_array(koopa_raw_type_t base, size_t size);
+koopa_raw_type_t generate_type_func(koopa_raw_type_t func_type, koopa_raw_slice_t params);
 koopa_raw_value_data_t *generate_number(int32_t number);
 koopa_raw_value_data_t *generate_zero_init(koopa_raw_type_tag_t tag);
+koopa_raw_value_data_t *generate_aggregate(koopa_raw_type_tag_t tag, koopa_raw_slice_t elements);
 koopa_raw_value_data_t *generate_func_arg_ref(koopa_raw_type_t ty, std::string ident);
 koopa_raw_function_data_t *generate_function_decl(std::string ident, std::vector<const void *> &params_ty, koopa_raw_type_t func_type);
 koopa_raw_function_data_t *generate_function(std::string ident, std::vector<const void *> &params, koopa_raw_type_t func_type);
 koopa_raw_basic_block_data_t *generate_block(const char *name);
-koopa_raw_value_data_t *generate_global_alloc(std::string ident, koopa_raw_value_t value, koopa_raw_type_tag_t tag);
-koopa_raw_value_data_t *generate_alloc_inst(std::string ident, koopa_raw_type_tag_t tag);
+koopa_raw_value_data_t *generate_global_alloc(std::string ident, koopa_raw_value_t value, koopa_raw_type_t tag);
+koopa_raw_value_data_t *generate_alloc_inst(std::string ident, koopa_raw_type_t base);
+koopa_raw_value_data_t *generate_getelemptr_inst(koopa_raw_value_t src, koopa_raw_value_t index);
 koopa_raw_value_data_t *generate_store_inst(koopa_raw_value_t dest, koopa_raw_value_t value);
 koopa_raw_value_data_t *generate_load_inst(koopa_raw_value_t src);
 koopa_raw_value_data_t *generate_binary_inst(koopa_raw_value_t lhs, koopa_raw_value_t rhs, koopa_raw_binary_op_t op);

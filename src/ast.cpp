@@ -338,7 +338,7 @@ void FuncDefAST::GenerateIR_void(std::vector<const void *> &funcs) const
     for (size_t i = 0; i < params.size(); i++)
     {
         koopa_raw_value_data_t *param = (koopa_raw_value_data_t *)params[i];
-        koopa_raw_value_data_t *alloc = generate_alloc_inst(param->name + 1, KOOPA_RTT_INT32);
+        koopa_raw_value_data_t *alloc = generate_alloc_inst(param->name + 1, generate_type(KOOPA_RTT_INT32));
         symbol_table.add_symbol(alloc->name + 1,
                                 SymbolTable::Value(SymbolTable::Value::Var, (koopa_raw_value_t)alloc));
         block_list.add_inst(alloc);
@@ -458,20 +458,63 @@ void ConstDeclAST::GenerateIR_void() const
     for (auto const_def = (*const_def_list).begin();
          const_def != (*const_def_list).end(); const_def++)
     {
-        (*const_def)->GenerateIR_void();
+        (*const_def)->GenerateIR_void(type->tag);
     }
     return;
 }
 
-void ConstDefAST::GenerateIR_void() const
+void ConstDefAST::GenerateIR_void(koopa_raw_type_tag_t tag) const
 {
 #ifdef DEBUG
     std::cout << "ConstDef" << std::endl;
 #endif
-    int val = const_init_val->CalculateValue();
-    SymbolTable::Value value = SymbolTable::Value(SymbolTable::Value::ValueType::Const, val);
-    symbol_table.add_symbol(ident, value);
-    return;
+    if (type == INT)
+    {
+        int val = const_init_val->CalculateValue();
+        SymbolTable::Value value = SymbolTable::Value(SymbolTable::Value::ValueType::Const, val);
+        symbol_table.add_symbol(ident, value);
+        return;
+    }
+    if (type == ARRAY)
+    {
+        size_t size = const_exp->CalculateValue();
+        koopa_raw_value_data_t *ret = generate_alloc_inst(ident, generate_type_array(generate_type(tag), size));
+        symbol_table.add_symbol(ident, SymbolTable::Value(SymbolTable::Value::Array, (koopa_raw_value_t)ret));
+        block_list.add_inst(ret);
+
+        std::vector<const void *> init_vec;
+        const_init_val->GenerateIR_void(init_vec);
+        for (int i = 0; i < size; i++)
+        {
+            koopa_raw_value_data_t *get = generate_getelemptr_inst(ret, generate_number(i));
+            koopa_raw_value_t init;
+            if (i < init_vec.size())
+            {
+                init = (koopa_raw_value_t)init_vec[i];
+            }
+            else
+            {
+                init = generate_number(0);
+            }
+            koopa_raw_value_data_t *store = generate_store_inst(get, init);
+            block_list.add_inst(get);
+            block_list.add_inst(store);
+        }
+        return;
+    }
+}
+
+void ConstInitValAST::GenerateIR_void(std::vector<const void *> &init_vec) const
+{
+    assert(type == ARRAY);
+    if (const_exp_list->size() > 0)
+    {
+        for (auto const_exp = (*const_exp_list).begin(); const_exp != (*const_exp_list).end();
+             const_exp++)
+        {
+            init_vec.push_back(generate_number((*const_exp)->CalculateValue()));
+        }
+    }
 }
 
 void VarDeclAST::GenerateIR_void() const
@@ -497,16 +540,61 @@ void VarDefAST::GenerateIR_void(koopa_raw_type_tag_t tag) const
 #ifdef DEBUG
     std::cout << "VarDef" << std::endl;
 #endif
-    koopa_raw_value_data_t *dest = generate_alloc_inst(ident, tag);
-    block_list.add_inst(dest);
-    symbol_table.add_symbol(ident, SymbolTable::Value(SymbolTable::Value::Var, (koopa_raw_value_t)dest));
-    if (is_init)
+    if (type == INT)
     {
-        koopa_raw_value_t value = (koopa_raw_value_t)init_val->GenerateIR_ret();
-        koopa_raw_value_data_t *store = generate_store_inst(dest, value);
-        block_list.add_inst(store);
+        koopa_raw_value_data_t *dest = generate_alloc_inst(ident, generate_type(tag));
+        block_list.add_inst(dest);
+        symbol_table.add_symbol(ident, SymbolTable::Value(SymbolTable::Value::Var, (koopa_raw_value_t)dest));
+        if (is_init)
+        {
+            koopa_raw_value_t value = (koopa_raw_value_t)init_val->GenerateIR_ret();
+            koopa_raw_value_data_t *store = generate_store_inst(dest, value);
+            block_list.add_inst(store);
+        }
+        return;
     }
-    return;
+    if (type == ARRAY)
+    {
+        size_t size = const_exp->CalculateValue();
+        std::vector<const void *> init_vec;
+        if (is_init)
+        {
+            init_val->GenerateIR_void(init_vec);
+        }
+        koopa_raw_value_data_t *ret = generate_alloc_inst(ident, generate_type_array(generate_type(tag), size));
+        symbol_table.add_symbol(ident, SymbolTable::Value(SymbolTable::Value::Array, (koopa_raw_value_t)ret));
+        block_list.add_inst(ret);
+        for (int i = 0; i < size; i++)
+        {
+            koopa_raw_value_data_t *get = generate_getelemptr_inst(ret, generate_number(i));
+            koopa_raw_value_t init;
+            if (i < init_vec.size())
+            {
+                init = (koopa_raw_value_t)init_vec[i];
+            }
+            else
+            {
+                init = generate_number(0);
+            }
+            koopa_raw_value_data_t *store = generate_store_inst(get, init);
+            block_list.add_inst(get);
+            block_list.add_inst(store);
+        }
+        return;
+    }
+}
+
+void InitValAST::GenerateIR_void(std::vector<const void *> &init_vec) const
+{
+    assert(type == ARRAY);
+    if (exp_list->size() > 0)
+    {
+        for (auto exp = (*exp_list).begin(); exp != (*exp_list).end();
+             exp++)
+        {
+            init_vec.push_back(generate_number((*exp)->CalculateValue()));
+        }
+    }
 }
 
 void *InitValAST::GenerateIR_ret() const
@@ -524,7 +612,7 @@ void StmtAST::GenerateIR_void() const
 #endif
     if (type == ASSIGN)
     {
-        koopa_raw_value_t dest = (koopa_raw_value_t)symbol_table.get_value(lval->GetIdent()).data.var_value;
+        koopa_raw_value_t dest = (koopa_raw_value_t)lval->GetLeftValue();
         koopa_raw_value_t value = (koopa_raw_value_t)exp->GenerateIR_ret();
         koopa_raw_value_data_t *ret = generate_store_inst(dest, value);
         block_list.add_inst(ret);
@@ -679,6 +767,18 @@ void *LValAST::GenerateIR_ret() const
         ret = generate_load_inst(value.data.var_value);
         block_list.add_inst(ret);
     }
+    else if (value.type == SymbolTable::Value::Array)
+    {
+        koopa_raw_value_data_t *src = generate_getelemptr_inst(value.data.array_value, (koopa_raw_value_t)exp->GenerateIR_ret());
+        ret = generate_load_inst(src);
+        block_list.add_inst(src);
+        block_list.add_inst(ret);
+    }
+    else
+    {
+        // std::cout << "Error: " << ident << " not found" << std::endl;
+        assert(0);
+    }
     return ret;
 }
 
@@ -702,7 +802,7 @@ void *LOrExpAST::GenerateIR_ret() const
 #endif
     if (type == 1)
         return land_exp->GenerateIR_ret();
-    koopa_raw_value_data_t *result = generate_alloc_inst("result", KOOPA_RTT_INT32);
+    koopa_raw_value_data_t *result = generate_alloc_inst("result", generate_type(KOOPA_RTT_INT32));
     block_list.add_inst(result);
 
     koopa_raw_value_data_t *store_1 = generate_store_inst((koopa_raw_value_t)result, (koopa_raw_value_t)generate_number(1));
@@ -742,7 +842,7 @@ void *LAndExpAST::GenerateIR_ret() const
 #endif
     if (type == 1)
         return eq_exp->GenerateIR_ret();
-    koopa_raw_value_data_t *result = generate_alloc_inst("result", KOOPA_RTT_INT32);
+    koopa_raw_value_data_t *result = generate_alloc_inst("result", generate_type(KOOPA_RTT_INT32));
     block_list.add_inst(result);
 
     koopa_raw_value_data_t *store_0 = generate_store_inst((koopa_raw_value_t)result, (koopa_raw_value_t)generate_number(0));
@@ -1063,11 +1163,62 @@ void DeclAST::GenerateGlobalValues(std::vector<const void *> &values) const
 #endif
     if (type == 1)
     {
-        const_decl->GenerateIR_void();
+        const_decl->GenerateGlobalValues(values);
     }
     else
     {
         var_decl->GenerateGlobalValues(values);
+    }
+    return;
+}
+
+void ConstDeclAST::GenerateGlobalValues(std::vector<const void *> &values) const
+{
+#ifdef DEBUG
+    std::cout << "ConstDecl" << std::endl;
+#endif
+    koopa_raw_type_t type = (koopa_raw_type_t)btype->GenerateIR_ret();
+    if (type->tag == KOOPA_RTT_UNIT)
+    {
+        assert(0);
+    }
+    for (auto const_def = (*const_def_list).begin();
+         const_def != (*const_def_list).end(); const_def++)
+    {
+        (*const_def)->GenerateGlobalValues(values, type->tag);
+    }
+    return;
+}
+
+void ConstDefAST::GenerateGlobalValues(std::vector<const void *> &values, koopa_raw_type_tag_t tag) const
+{
+#ifdef DEBUG
+    std::cout << "ConstDef" << std::endl;
+#endif
+    if (type == INT)
+    {
+        int val = const_init_val->CalculateValue();
+        symbol_table.add_symbol(ident, SymbolTable::Value(SymbolTable::Value::Const, val));
+    }
+    if (type == ARRAY)
+    {
+        size_t size = const_exp->CalculateValue();
+
+        std::vector<const void *> init_vec;
+        const_init_val->GenerateIR_void(init_vec);
+        koopa_raw_value_t init;
+        if (init_vec.size() == 0)
+        {
+            init = generate_zero_init(tag);
+        }
+        else
+        {
+            koopa_raw_slice_t elements = generate_slice(init_vec, KOOPA_RSIK_VALUE);
+            init = generate_aggregate(tag, elements);
+        }
+        koopa_raw_value_data_t *ret = generate_global_alloc(ident, init, generate_type_array(generate_type(tag), size));
+        symbol_table.add_symbol(ident, SymbolTable::Value(SymbolTable::Value::Array, (koopa_raw_value_t)ret));
+        values.push_back(ret);
     }
     return;
 }
@@ -1095,19 +1246,48 @@ void VarDefAST::GenerateGlobalValues(std::vector<const void *> &values, koopa_ra
 #ifdef DEBUG
     std::cout << "VarDef" << std::endl;
 #endif
-    koopa_raw_value_t value;
-    if (is_init)
+    if (type == INT)
     {
-        value = (koopa_raw_value_t)init_val->GenerateIR_ret();
-    }
-    else
-    {
-        value = (koopa_raw_value_t)generate_zero_init(tag);
-    }
-    koopa_raw_value_data_t *ret = generate_global_alloc(ident, value, tag);
+        koopa_raw_value_t value;
+        if (is_init)
+        {
+            value = (koopa_raw_value_t)init_val->GenerateIR_ret();
+        }
+        else
+        {
+            value = (koopa_raw_value_t)generate_zero_init(tag);
+        }
+        koopa_raw_value_data_t *ret = generate_global_alloc(ident, value, generate_type(tag));
 
-    symbol_table.add_symbol(ident, SymbolTable::Value(SymbolTable::Value::Var, (koopa_raw_value_t)ret));
-    values.push_back(ret);
+        symbol_table.add_symbol(ident, SymbolTable::Value(SymbolTable::Value::Var, (koopa_raw_value_t)ret));
+        values.push_back(ret);
+    }
+    else if (type == ARRAY)
+    {
+        size_t size = const_exp->CalculateValue();
+        koopa_raw_value_t init;
+        if (is_init)
+        {
+            std::vector<const void *> init_vec;
+            init_val->GenerateIR_void(init_vec);
+            if (init_vec.size() == 0)
+            {
+                init = generate_zero_init(tag);
+            }
+            else
+            {
+                koopa_raw_slice_t elements = generate_slice(init_vec, KOOPA_RSIK_VALUE);
+                init = generate_aggregate(tag, elements);
+            }
+        }
+        else
+        {
+            init = generate_zero_init(tag);
+        }
+        koopa_raw_value_data_t *ret = generate_global_alloc(ident, init, generate_type_array(generate_type(tag), size));
+        symbol_table.add_symbol(ident, SymbolTable::Value(SymbolTable::Value::Array, (koopa_raw_value_t)ret));
+        values.push_back(ret);
+    }
     return;
 }
 
@@ -1133,7 +1313,7 @@ void CompUnitAST::load_lib_funcs(std::vector<const void *> &funcs) const
     funcs.push_back(func);
 
     // int getarray(*int)
-    params_ty.push_back(generate_type(KOOPA_RTT_POINTER, KOOPA_RTT_INT32));
+    params_ty.push_back(generate_type_pointer(generate_type(KOOPA_RTT_INT32)));
     func = generate_function_decl("getarray", params_ty, generate_type(KOOPA_RTT_INT32));
     symbol_table.add_symbol("getarray",
                             SymbolTable::Value(SymbolTable::Value::Func, (koopa_raw_function_t)func));
@@ -1158,7 +1338,7 @@ void CompUnitAST::load_lib_funcs(std::vector<const void *> &funcs) const
     // void putarray(int, *int)
     params_ty.clear();
     params_ty.push_back(generate_type(KOOPA_RTT_INT32));
-    params_ty.push_back(generate_type(KOOPA_RTT_POINTER, KOOPA_RTT_INT32));
+    params_ty.push_back(generate_type_pointer(generate_type(KOOPA_RTT_INT32)));
     func = generate_function_decl("putarray", params_ty, generate_type(KOOPA_RTT_UNIT));
     symbol_table.add_symbol("putarray",
                             SymbolTable::Value(SymbolTable::Value::Func, (koopa_raw_function_t)func));
@@ -1179,12 +1359,24 @@ void CompUnitAST::load_lib_funcs(std::vector<const void *> &funcs) const
     funcs.push_back(func);
 }
 
-std::string LValAST::GetIdent() const
+void *LValAST::GetLeftValue() const
 {
 #ifdef DEBUG
-    std::cout << "LVal::GetIdent" << std::endl;
+    std::cout << "LVal::GetLeftValue" << std::endl;
 #endif
-    return ident;
+    SymbolTable::Value value = symbol_table.get_value(ident);
+    if (value.type == SymbolTable::Value::Var)
+    {
+        return (void *)value.data.var_value;
+    }
+    else if (value.type == SymbolTable::Value::Array)
+    {
+        koopa_raw_value_data_t *ret = generate_getelemptr_inst(value.data.array_value, (koopa_raw_value_t)exp->GenerateIR_ret());
+        block_list.add_inst(ret);
+        return (void *)ret;
+    }
+    assert(0);
+    return nullptr;
 }
 
 koopa_raw_slice_t generate_slice(koopa_raw_slice_item_kind_t kind)
@@ -1224,11 +1416,29 @@ koopa_raw_type_t generate_type(koopa_raw_type_tag_t tag)
     return (koopa_raw_type_t)ret;
 }
 
-koopa_raw_type_t generate_type(koopa_raw_type_tag_t tag, koopa_raw_type_tag_t base)
+koopa_raw_type_t generate_type_pointer(koopa_raw_type_t base)
 {
     koopa_raw_type_kind_t *ret = new koopa_raw_type_kind_t();
-    ret->tag = tag;
-    ret->data.pointer.base = generate_type(base);
+    ret->tag = KOOPA_RTT_POINTER;
+    ret->data.pointer.base = base;
+    return (koopa_raw_type_t)ret;
+}
+
+koopa_raw_type_t generate_type_array(koopa_raw_type_t base, size_t size)
+{
+    koopa_raw_type_kind_t *ret = new koopa_raw_type_kind_t();
+    ret->tag = KOOPA_RTT_ARRAY;
+    ret->data.array.base = base;
+    ret->data.array.len = size;
+    return (koopa_raw_type_t)ret;
+}
+
+koopa_raw_type_t generate_type_func(koopa_raw_type_t func_type, koopa_raw_slice_t params)
+{
+    koopa_raw_type_kind_t *ret = new koopa_raw_type_kind_t();
+    ret->tag = KOOPA_RTT_FUNCTION;
+    ret->data.function.ret = func_type;
+    ret->data.function.params = params;
     return (koopa_raw_type_t)ret;
 }
 
@@ -1253,6 +1463,17 @@ koopa_raw_value_data_t *generate_zero_init(koopa_raw_type_tag_t tag)
     return ret;
 }
 
+koopa_raw_value_data_t *generate_aggregate(koopa_raw_type_tag_t tag, koopa_raw_slice_t elements)
+{
+    koopa_raw_value_data *ret = new koopa_raw_value_data();
+    ret->ty = generate_type(tag);
+    ret->name = nullptr;
+    ret->used_by = generate_slice(KOOPA_RSIK_VALUE);
+    ret->kind.tag = KOOPA_RVT_AGGREGATE;
+    ret->kind.data.aggregate.elems = elements;
+    return ret;
+}
+
 koopa_raw_value_data_t *generate_func_arg_ref(koopa_raw_type_t ty, std::string ident)
 {
     koopa_raw_value_data_t *ret = new koopa_raw_value_data();
@@ -1266,23 +1487,20 @@ koopa_raw_value_data_t *generate_func_arg_ref(koopa_raw_type_t ty, std::string i
     return ret;
 }
 
-koopa_raw_function_data_t *generate_function_decl(std::string ident, std::vector<const void *> &params_ty, const struct koopa_raw_type_kind *func_type)
+koopa_raw_function_data_t *generate_function_decl(std::string ident, std::vector<const void *> &params_ty, koopa_raw_type_t func_type)
 {
     koopa_raw_function_data_t *ret = new koopa_raw_function_data_t();
-    // init ty
-    koopa_raw_type_kind_t *func_ty = new koopa_raw_type_kind_t();
-    func_ty->tag = KOOPA_RTT_FUNCTION;
+    koopa_raw_slice_t params;
     if (params_ty.size() == 0)
     {
-        func_ty->data.function.params = generate_slice(KOOPA_RSIK_TYPE);
+        params = generate_slice(KOOPA_RSIK_TYPE);
     }
     else
     {
-        func_ty->data.function.params = generate_slice(params_ty, KOOPA_RSIK_TYPE);
+        params = generate_slice(params_ty, KOOPA_RSIK_TYPE);
     }
+    ret->ty = generate_type_func(func_type, params);
     ret->params = generate_slice(KOOPA_RSIK_VALUE);
-    func_ty->data.function.ret = func_type;
-    ret->ty = func_ty;
     char *name = new char[ident.size() + 2];
     name[ident.size() + 1] = '\0';
     ret->name = strcpy(name, ("@" + ident).c_str());
@@ -1293,12 +1511,10 @@ koopa_raw_function_data_t *generate_function_decl(std::string ident, std::vector
 koopa_raw_function_data_t *generate_function(std::string ident, std::vector<const void *> &params, koopa_raw_type_t func_type)
 {
     koopa_raw_function_data_t *ret = new koopa_raw_function_data_t();
-    // init ty
-    koopa_raw_type_kind_t *func_ty = new koopa_raw_type_kind_t();
-    func_ty->tag = KOOPA_RTT_FUNCTION;
+    koopa_raw_slice_t params_type;
     if (params.size() == 0)
     {
-        func_ty->data.function.params = generate_slice(KOOPA_RSIK_TYPE);
+        params_type = generate_slice(KOOPA_RSIK_TYPE);
         ret->params = generate_slice(KOOPA_RSIK_VALUE);
     }
     else
@@ -1308,11 +1524,10 @@ koopa_raw_function_data_t *generate_function(std::string ident, std::vector<cons
         {
             params_ty.push_back(((koopa_raw_value_data_t *)params[i])->ty);
         }
-        func_ty->data.function.params = generate_slice(params_ty, KOOPA_RSIK_TYPE);
+        params_type = generate_slice(params_ty, KOOPA_RSIK_TYPE);
         ret->params = generate_slice(params, KOOPA_RSIK_VALUE);
     }
-    func_ty->data.function.ret = func_type;
-    ret->ty = func_ty;
+    ret->ty = generate_type_func(func_type, params_type);
     char *name = new char[ident.size() + 2];
     name[ident.size() + 1] = '\0';
     ret->name = strcpy(name, ("@" + ident).c_str());
@@ -1328,10 +1543,10 @@ koopa_raw_basic_block_data_t *generate_block(const char *name)
     return ret;
 }
 
-koopa_raw_value_data_t *generate_global_alloc(std::string ident, koopa_raw_value_t value, koopa_raw_type_tag_t tag)
+koopa_raw_value_data_t *generate_global_alloc(std::string ident, koopa_raw_value_t value, koopa_raw_type_t base)
 {
     koopa_raw_value_data_t *ret = new koopa_raw_value_data();
-    ret->ty = generate_type(KOOPA_RTT_POINTER, tag);
+    ret->ty = generate_type_pointer(base);
     char *name = new char[ident.size() + 2];
     name[ident.size() + 1] = '\0';
     ret->name = strcpy(name, ("@" + ident).c_str());
@@ -1341,15 +1556,27 @@ koopa_raw_value_data_t *generate_global_alloc(std::string ident, koopa_raw_value
     return ret;
 }
 
-koopa_raw_value_data_t *generate_alloc_inst(std::string ident, koopa_raw_type_tag_t tag)
+koopa_raw_value_data_t *generate_alloc_inst(std::string ident, koopa_raw_type_t base)
 {
     koopa_raw_value_data_t *ret = new koopa_raw_value_data();
-    ret->ty = generate_type(KOOPA_RTT_POINTER, tag);
+    ret->ty = generate_type_pointer(base);
     char *name = new char[ident.size() + 2];
     name[ident.size() + 1] = '\0';
     ret->name = strcpy(name, ("@" + ident).c_str());
     ret->used_by = generate_slice(KOOPA_RSIK_VALUE);
     ret->kind.tag = KOOPA_RVT_ALLOC;
+    return ret;
+}
+
+koopa_raw_value_data_t *generate_getelemptr_inst(koopa_raw_value_t src, koopa_raw_value_t index)
+{
+    koopa_raw_value_data_t *ret = new koopa_raw_value_data();
+    ret->ty = generate_type_pointer(src->ty->data.array.base);
+    ret->name = nullptr;
+    ret->used_by = generate_slice(KOOPA_RSIK_VALUE);
+    ret->kind.tag = KOOPA_RVT_GET_ELEM_PTR;
+    ret->kind.data.get_elem_ptr.src = src;
+    ret->kind.data.get_elem_ptr.index = index;
     return ret;
 }
 
@@ -1568,7 +1795,7 @@ void ConstDefAST::Dump() const
 {
     std::cout << "ConstDef{";
     std::cout << " " << ident;
-    if (is_array)
+    if (type == ARRAY)
     {
         std::cout << "[";
         const_exp->Dump();
@@ -1628,7 +1855,7 @@ void VarDefAST::Dump() const
 {
     std::cout << "VarDef{";
     std::cout << " " << ident << " ";
-    if (is_array)
+    if (type == ARRAY)
     {
         std::cout << "[";
         const_exp->Dump();
