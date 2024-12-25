@@ -137,9 +137,11 @@ class BlockList
 private:
     std::vector<const void *> block_list;
     std::vector<const void *> tmp_inst_buf;
+    std::string func_name;
 
 public:
-    void init();
+    void init(std::string ident);
+    const char *generate_block_name(std::string ident);
     void add_block(koopa_raw_basic_block_data_t *block);
     void add_inst(const void *inst);
     void push_tmp_inst();
@@ -622,6 +624,7 @@ public:
 /************************************************Utils*****************************************************/
 /**********************************************************************************************************/
 
+const char *generate_var_name(std::string ident);
 koopa_raw_slice_t generate_slice(koopa_raw_slice_item_kind_t kind = KOOPA_RSIK_UNKNOWN);
 koopa_raw_slice_t generate_slice(std::vector<const void *> &vec,
                                  koopa_raw_slice_item_kind_t kind = KOOPA_RSIK_UNKNOWN);
@@ -637,7 +640,7 @@ koopa_raw_value_data_t *generate_aggregate(koopa_raw_type_t type, koopa_raw_slic
 koopa_raw_value_data_t *generate_func_arg_ref(koopa_raw_type_t ty, std::string ident);
 koopa_raw_function_data_t *generate_function_decl(std::string ident, std::vector<const void *> &params_ty, koopa_raw_type_t func_type);
 koopa_raw_function_data_t *generate_function(std::string ident, std::vector<const void *> &params, koopa_raw_type_t func_type);
-koopa_raw_basic_block_data_t *generate_block(const char *name);
+koopa_raw_basic_block_data_t *generate_block(std::string name);
 koopa_raw_value_data_t *generate_global_alloc(std::string ident, koopa_raw_value_t value, koopa_raw_type_t tag);
 koopa_raw_value_data_t *generate_alloc_inst(std::string ident, koopa_raw_type_t base);
 koopa_raw_value_data_t *generate_getelemptr_inst(koopa_raw_value_t src, koopa_raw_value_t index);

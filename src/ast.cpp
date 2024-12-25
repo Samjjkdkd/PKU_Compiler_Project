@@ -86,13 +86,25 @@ void SymbolTable::del_table()
 /************************************************BlockList*****************************************************/
 /**************************************************************************************************************/
 
-void BlockList::init()
+const char *BlockList::generate_block_name(std::string ident)
+{
+#ifdef DEBUG
+    std::cout << "BlockList::generate_block_name" << std::endl;
+#endif
+    char *name = new char[func_name.size() + ident.size() + 3];
+    name[func_name.size() + ident.size() + 2] = '\0';
+    strcpy(name, ("%" + func_name + "_" + ident).c_str());
+    return name;
+}
+
+void BlockList::init(std::string ident)
 {
 #ifdef DEBUG
     std::cout << "BlockList::init" << std::endl;
 #endif
     block_list.clear();
     tmp_inst_buf.clear();
+    func_name = ident;
 }
 
 std::vector<const void *> BlockList::get_block_list()
@@ -108,8 +120,6 @@ void BlockList::add_block(koopa_raw_basic_block_data_t *block)
 #ifdef DEBUG
     std::cout << "BlockList::add_block" << std::endl;
 #endif
-    block->insts.buffer = nullptr;
-    block->insts.len = 0;
     block_list.push_back(block);
 }
 
@@ -330,8 +340,8 @@ void FuncDefAST::GenerateIR_void(std::vector<const void *> &funcs) const
     symbol_table.add_symbol(ident,
                             SymbolTable::Value(SymbolTable::Value::Func, (koopa_raw_function_t)ret));
 
-    block_list.init();
-    koopa_raw_basic_block_data_t *entry = generate_block("%entry");
+    block_list.init(ident);
+    koopa_raw_basic_block_data_t *entry = generate_block("entry");
     block_list.add_block(entry);
     symbol_table.add_table();
 
@@ -646,7 +656,7 @@ void StmtAST::GenerateIR_void() const
         bool true_block_no_return = block_list.check_return();
         if (stmt != nullptr)
         {
-            koopa_raw_basic_block_data_t *end_block = generate_block("%end");
+            koopa_raw_basic_block_data_t *end_block = generate_block("end");
             if (true_block_no_return)
             {
                 block_list.add_inst(generate_jump_inst(end_block));
@@ -689,7 +699,7 @@ void *IfExpAST::GenerateIR_ret() const
 #endif
     koopa_raw_value_t cond = (koopa_raw_value_t)exp->GenerateIR_ret();
     koopa_raw_value_data_t *ret =
-        generate_branch_inst(cond, generate_block("%true"), generate_block("%false"));
+        generate_branch_inst(cond, generate_block("true"), generate_block("false"));
     block_list.add_inst(ret);
     block_list.push_tmp_inst();
     block_list.add_block((koopa_raw_basic_block_data_t *)ret->kind.data.branch.true_bb);
@@ -704,9 +714,9 @@ void WhileExpAST::GenerateIR_void() const
 #endif
     if (type == WHILE)
     {
-        koopa_raw_basic_block_data_t *cond_block = generate_block("%cond");
-        koopa_raw_basic_block_data_t *body_block = generate_block("%body");
-        koopa_raw_basic_block_data_t *end_block = generate_block("%end");
+        koopa_raw_basic_block_data_t *cond_block = generate_block("cond");
+        koopa_raw_basic_block_data_t *body_block = generate_block("body");
+        koopa_raw_basic_block_data_t *end_block = generate_block("end");
         loop_stack.add_loop(cond_block, end_block);
 
         block_list.add_inst(generate_jump_inst(cond_block));
@@ -811,7 +821,7 @@ void *LOrExpAST::GenerateIR_ret() const
     block_list.add_inst(store_1);
 
     koopa_raw_value_data_t *branch =
-        generate_branch_inst((koopa_raw_value_t)lor_exp->GenerateIR_ret(), generate_block("%end"), generate_block("%true"));
+        generate_branch_inst((koopa_raw_value_t)lor_exp->GenerateIR_ret(), generate_block("end"), generate_block("true"));
     block_list.add_inst(branch);
 
     block_list.push_tmp_inst();
@@ -851,7 +861,7 @@ void *LAndExpAST::GenerateIR_ret() const
     block_list.add_inst(store_0);
 
     koopa_raw_value_data_t *branch =
-        generate_branch_inst((koopa_raw_value_t)land_exp->GenerateIR_ret(), generate_block("%true"), generate_block("%end"));
+        generate_branch_inst((koopa_raw_value_t)land_exp->GenerateIR_ret(), generate_block("true"), generate_block("end"));
     block_list.add_inst(branch);
 
     block_list.push_tmp_inst();
@@ -1385,6 +1395,14 @@ void *LValAST::GetLeftValue() const
     return nullptr;
 }
 
+const char *generate_var_name(std::string ident)
+{
+    char *ret = new char[ident.size() + 2];
+    ret[ident.size() + 1] = '\0';
+    strcpy(ret, ("@" + ident).c_str());
+    return ret;
+}
+
 koopa_raw_slice_t generate_slice(koopa_raw_slice_item_kind_t kind)
 {
     koopa_raw_slice_t ret;
@@ -1484,9 +1502,7 @@ koopa_raw_value_data_t *generate_func_arg_ref(koopa_raw_type_t ty, std::string i
 {
     koopa_raw_value_data_t *ret = new koopa_raw_value_data();
     ret->ty = ty;
-    char *name = new char[ident.size() + 2];
-    name[ident.size() + 1] = '\0';
-    ret->name = strcpy(name, ("@" + ident).c_str());
+    ret->name = generate_var_name(ident);
     ret->used_by = generate_slice(KOOPA_RSIK_VALUE);
     ret->kind.tag = KOOPA_RVT_FUNC_ARG_REF;
     ret->kind.data.func_arg_ref.index = -1;
@@ -1507,9 +1523,7 @@ koopa_raw_function_data_t *generate_function_decl(std::string ident, std::vector
     }
     ret->ty = generate_type_func(func_type, params);
     ret->params = generate_slice(KOOPA_RSIK_VALUE);
-    char *name = new char[ident.size() + 2];
-    name[ident.size() + 1] = '\0';
-    ret->name = strcpy(name, ("@" + ident).c_str());
+    ret->name = generate_var_name(ident);
     ret->bbs = generate_slice(KOOPA_RSIK_BASIC_BLOCK);
     return ret;
 }
@@ -1534,16 +1548,16 @@ koopa_raw_function_data_t *generate_function(std::string ident, std::vector<cons
         ret->params = generate_slice(params, KOOPA_RSIK_VALUE);
     }
     ret->ty = generate_type_func(func_type, params_type);
-    char *name = new char[ident.size() + 2];
-    name[ident.size() + 1] = '\0';
-    ret->name = strcpy(name, ("@" + ident).c_str());
+    ret->name = generate_var_name(ident);
     return ret;
 }
 
-koopa_raw_basic_block_data_t *generate_block(const char *name)
+koopa_raw_basic_block_data_t *generate_block(std::string name)
 {
     koopa_raw_basic_block_data_t *ret = new koopa_raw_basic_block_data_t();
-    ret->name = name;
+    ret->name = block_list.generate_block_name(name);
+    ret->insts.buffer = nullptr;
+    ret->insts.len = 0;
     ret->params = generate_slice(KOOPA_RSIK_VALUE);
     ret->used_by = generate_slice(KOOPA_RSIK_VALUE);
     return ret;
@@ -1553,9 +1567,7 @@ koopa_raw_value_data_t *generate_global_alloc(std::string ident, koopa_raw_value
 {
     koopa_raw_value_data_t *ret = new koopa_raw_value_data();
     ret->ty = generate_type_pointer(base);
-    char *name = new char[ident.size() + 2];
-    name[ident.size() + 1] = '\0';
-    ret->name = strcpy(name, ("@" + ident).c_str());
+    ret->name = generate_var_name(ident);
     ret->used_by = generate_slice(KOOPA_RSIK_VALUE);
     ret->kind.tag = KOOPA_RVT_GLOBAL_ALLOC;
     ret->kind.data.global_alloc.init = value;
@@ -1566,9 +1578,7 @@ koopa_raw_value_data_t *generate_alloc_inst(std::string ident, koopa_raw_type_t 
 {
     koopa_raw_value_data_t *ret = new koopa_raw_value_data();
     ret->ty = generate_type_pointer(base);
-    char *name = new char[ident.size() + 2];
-    name[ident.size() + 1] = '\0';
-    ret->name = strcpy(name, ("@" + ident).c_str());
+    ret->name = generate_var_name(ident);
     ret->used_by = generate_slice(KOOPA_RSIK_VALUE);
     ret->kind.tag = KOOPA_RVT_ALLOC;
     return ret;
