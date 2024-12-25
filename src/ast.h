@@ -27,13 +27,14 @@
 
 // ConstDecl     ::= "const" BType ConstDef {"," ConstDef} ";";
 // BType         ::= "int";
-// ConstDef      ::= IDENT "=" ConstInitVal;
-// ConstInitVal  ::= ConstExp;
+// ConstDef :: = IDENT["[" ConstExp "]"] "=" ConstInitVal;
+// ConstInitVal :: = ConstExp | "{"[ConstExp{"," ConstExp}] "}";
 // ConstExp      ::= Exp;
 
 // VarDecl       ::= BType VarDef {"," VarDef} ";";
-// VarDef        ::= IDENT | IDENT "=" InitVal;
-// InitVal       ::= Exp;
+
+// VarDef :: = IDENT["[" ConstExp "]"] | IDENT["[" ConstExp "]"] "=" InitVal;
+// InitVal :: = Exp | "{"[Exp{"," Exp}] "}";
 
 // Stmt          :: = LVal "=" Exp ";"
 //                    | [Exp] ";"
@@ -47,7 +48,7 @@
 //                   | "continue" ";";
 //                   | "break" ";";
 
-// LVal        ::= IDENT;
+// LVal :: = IDENT["[" Exp "]"];
 
 // Exp         ::= LOrExp;
 // LOrExp      ::= LAndExp | LOrExp "||" LAndExp;
@@ -303,22 +304,30 @@ public:
 
 // BType         ::= "int";
 
-// ConstDef      ::= IDENT "=" ConstInitVal;
+// ConstDef :: = IDENT["[" ConstExp "]"] "=" ConstInitVal;
 class ConstDefAST : public BaseAST
 {
 public:
+    bool is_array;
     std::string ident;
+    std::unique_ptr<BaseAST> const_exp;
     std::unique_ptr<BaseAST> const_init_val;
 
     void Dump() const override;
     void GenerateIR_void() const override;
 };
 
-// ConstInitVal  ::= ConstExp;
+// ConstInitVal :: = ConstExp | "{"[ConstExp{"," ConstExp}] "}";
 class ConstInitValAST : public BaseAST
 {
 public:
+    enum
+    {
+        INT,
+        ARRAY
+    } type;
     std::unique_ptr<BaseAST> const_exp;
+    std::unique_ptr<std::vector<std::unique_ptr<BaseAST>>> const_exp_list;
 
     void Dump() const override;
     std::int32_t CalculateValue() const override;
@@ -346,24 +355,32 @@ public:
     void GenerateGlobalValues(std::vector<const void *> &values) const override;
 };
 
-// VarDef        ::= IDENT | IDENT "=" InitVal;
+// VarDef :: = IDENT["[" ConstExp "]"] | IDENT["[" ConstExp "]"] "=" InitVal;
 class VarDefAST : public BaseAST
 {
 public:
-    std::int32_t type;
+    bool is_array;
+    bool is_init;
     std::string ident;
     std::unique_ptr<BaseAST> init_val;
+    std::unique_ptr<BaseAST> const_exp;
 
     void Dump() const override;
     void GenerateIR_void(koopa_raw_type_tag_t tag) const override;
     void GenerateGlobalValues(std::vector<const void *> &values, koopa_raw_type_tag_t tag) const override;
 };
 
-// InitVal       ::= Exp;
+// InitVal :: = Exp | "{"[Exp{"," Exp}] "}";
 class InitValAST : public BaseAST
 {
 public:
+    enum
+    {
+        INT,
+        ARRAY
+    } type;
     std::unique_ptr<BaseAST> exp;
+    std::unique_ptr<std::vector<std::unique_ptr<BaseAST>>> exp_list;
 
     void Dump() const override;
     void *GenerateIR_ret() const override;
@@ -426,11 +443,17 @@ public:
     void GenerateIR_void() const override;
 };
 
-// LVal        ::= IDENT;
+// LVal :: = IDENT["[" Exp "]"];
 class LValAST : public BaseAST
 {
 public:
+    enum
+    {
+        INT,
+        ARRAY
+    } type;
     std::string ident;
+    std::unique_ptr<BaseAST> exp;
 
     void Dump() const override;
     std::string GetIdent() const override;
