@@ -298,7 +298,7 @@ ConstInitVal
   | '{' '}' {
     auto ast = new ConstInitValAST();
     auto vec = new vector<unique_ptr<BaseAST> >();
-    ast->type = ConstInitValAST::ARRAY;
+    ast->type = ConstInitValAST::EMPTY;
     ast->const_init_val_list = unique_ptr<vector<unique_ptr<BaseAST> >>(vec);
     $$ = ast;
   }
@@ -398,7 +398,7 @@ InitVal
   | '{' '}' {
     auto ast = new InitValAST();
     auto vec = new vector<unique_ptr<BaseAST> >();
-    ast->type = InitValAST::ARRAY;
+    ast->type = InitValAST::EMPTY;
     ast->init_val_list = unique_ptr<vector<unique_ptr<BaseAST> >>(vec);
     $$ = ast;
   }

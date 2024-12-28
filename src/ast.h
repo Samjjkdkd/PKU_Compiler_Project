@@ -10,6 +10,7 @@
 #include "koopa.h"
 
 // #define DEBUG
+//  #define DEBUG2
 
 //  CompUnit      ::= Def {Def};
 //  Def           ::= Decl | FuncDef;
@@ -194,8 +195,10 @@ public:
     virtual void *GetLeftValue() const { return nullptr; };
     virtual std::int32_t CalculateValue() const { return 0; };
     virtual void GenerateGlobalValues(std::vector<const void *> &vec) const { return; };
+    virtual void ArrayInit(std::vector<const void *> &init_vec, std::vector<size_t> size_vec) const { return; };
     virtual void GenerateGlobalValues(std::vector<const void *> &values, koopa_raw_type_tag_t tag) const { return; };
     virtual void *GenerateIR_ret() const { return nullptr; };
+    virtual void *GenerateIR_ret(std::vector<const void *> &init_vec, std::vector<size_t> size_vec, int level) const { return nullptr; };
     virtual void GenerateIR_void() const { return; };
     virtual void GenerateIR_void(koopa_raw_type_tag_t tag) const { return; };
     virtual void GenerateIR_void(std::vector<const void *> &funcs, std::vector<const void *> &values) const { return; };
@@ -342,14 +345,16 @@ public:
     enum
     {
         INT,
-        ARRAY
+        ARRAY,
+        EMPTY
     } type;
     std::unique_ptr<BaseAST> const_exp;
     std::unique_ptr<std::vector<std::unique_ptr<BaseAST>>> const_init_val_list;
 
     void Dump() const override;
     std::int32_t CalculateValue() const override;
-    void GenerateIR_void(std::vector<const void *> &init_vec) const override;
+    void *GenerateIR_ret(std::vector<const void *> &init_vec, std::vector<size_t> size_vec, int level) const override;
+    void ArrayInit(std::vector<const void *> &init_vec, std::vector<size_t> size_vec) const override;
 };
 
 // ConstExp    ::= Exp;
@@ -401,14 +406,16 @@ public:
     enum
     {
         INT,
-        ARRAY
+        ARRAY,
+        EMPTY
     } type;
     std::unique_ptr<BaseAST> exp;
     std::unique_ptr<std::vector<std::unique_ptr<BaseAST>>> init_val_list;
 
     void Dump() const override;
     void *GenerateIR_ret() const override;
-    void GenerateIR_void(std::vector<const void *> &init_vec) const override;
+    void *GenerateIR_ret(std::vector<const void *> &init_vec, std::vector<size_t> size_vec, int level) const override;
+    void ArrayInit(std::vector<const void *> &init_vec, std::vector<size_t> size_vec) const override;
 };
 
 // Stmt          :: = LVal "=" Exp ";"
@@ -637,6 +644,7 @@ koopa_raw_type_t generate_type(koopa_raw_type_tag_t tag);
 koopa_raw_type_t generate_type_pointer(koopa_raw_type_t base);
 koopa_raw_type_t generate_type_array(koopa_raw_type_t base, size_t size);
 koopa_raw_type_t generate_type_func(koopa_raw_type_t func_type, koopa_raw_slice_t params);
+koopa_raw_type_t generate_linked_list_type(koopa_raw_type_t base, std::vector<size_t> size_vec);
 koopa_raw_value_data_t *generate_number(int32_t number);
 koopa_raw_value_data_t *generate_zero_init(koopa_raw_type_t type);
 koopa_raw_value_data_t *generate_aggregate(koopa_raw_type_t type, koopa_raw_slice_t elements);
