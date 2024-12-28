@@ -27,14 +27,16 @@
 
 // ConstDecl     ::= "const" BType ConstDef {"," ConstDef} ";";
 // BType         ::= "int";
-// ConstDef :: = IDENT["[" ConstExp "]"] "=" ConstInitVal;
-// ConstInitVal :: = ConstExp | "{"[ConstExp{"," ConstExp}] "}";
+// ConstDef      ::= IDENT {"[" ConstExp "]"} "=" ConstInitVal;
+// ConstInitVal  ::= ConstExp | "{" [ConstInitVal {"," ConstInitVal}] "}";
+
 // ConstExp      ::= Exp;
 
 // VarDecl       ::= BType VarDef {"," VarDef} ";";
 
-// VarDef :: = IDENT["[" ConstExp "]"] | IDENT["[" ConstExp "]"] "=" InitVal;
-// InitVal :: = Exp | "{"[Exp{"," Exp}] "}";
+// VarDef        ::= IDENT {"[" ConstExp "]"}
+//                 | IDENT {"[" ConstExp "]"} "=" InitVal;
+// InitVal       ::= Exp | "{" [InitVal {"," InitVal}] "}";
 
 // Stmt          :: = LVal "=" Exp ";"
 //                    | [Exp] ";"
@@ -48,7 +50,7 @@
 //                   | "continue" ";";
 //                   | "break" ";";
 
-// LVal :: = IDENT["[" Exp "]"];
+// LVal :: = IDENT{"[" Exp "]"};
 
 // Exp         ::= LOrExp;
 // LOrExp      ::= LAndExp | LOrExp "||" LAndExp;
@@ -315,7 +317,7 @@ public:
 
 // BType         ::= "int";
 
-// ConstDef :: = IDENT["[" ConstExp "]"] "=" ConstInitVal;
+// ConstDef      ::= IDENT {"[" ConstExp "]"} "=" ConstInitVal;
 class ConstDefAST : public BaseAST
 {
 public:
@@ -325,7 +327,7 @@ public:
         ARRAY
     } type;
     std::string ident;
-    std::unique_ptr<BaseAST> const_exp;
+    std::unique_ptr<std::vector<std::unique_ptr<BaseAST>>> const_exp_list;
     std::unique_ptr<BaseAST> const_init_val;
 
     void Dump() const override;
@@ -333,7 +335,7 @@ public:
     void GenerateGlobalValues(std::vector<const void *> &values, koopa_raw_type_tag_t tag) const override;
 };
 
-// ConstInitVal :: = ConstExp | "{"[ConstExp{"," ConstExp}] "}";
+// ConstInitVal  ::= ConstExp | "{" [ConstInitVal {"," ConstInitVal}] "}";
 class ConstInitValAST : public BaseAST
 {
 public:
@@ -343,7 +345,7 @@ public:
         ARRAY
     } type;
     std::unique_ptr<BaseAST> const_exp;
-    std::unique_ptr<std::vector<std::unique_ptr<BaseAST>>> const_exp_list;
+    std::unique_ptr<std::vector<std::unique_ptr<BaseAST>>> const_init_val_list;
 
     void Dump() const override;
     std::int32_t CalculateValue() const override;
@@ -372,7 +374,8 @@ public:
     void GenerateGlobalValues(std::vector<const void *> &values) const override;
 };
 
-// VarDef :: = IDENT["[" ConstExp "]"] | IDENT["[" ConstExp "]"] "=" InitVal;
+// VarDef        ::= IDENT {"[" ConstExp "]"}
+//                 | IDENT {"[" ConstExp "]"} "=" InitVal;
 class VarDefAST : public BaseAST
 {
 public:
@@ -384,14 +387,14 @@ public:
     bool is_init;
     std::string ident;
     std::unique_ptr<BaseAST> init_val;
-    std::unique_ptr<BaseAST> const_exp;
+    std::unique_ptr<std::vector<std::unique_ptr<BaseAST>>> const_exp_list;
 
     void Dump() const override;
     void GenerateIR_void(koopa_raw_type_tag_t tag) const override;
     void GenerateGlobalValues(std::vector<const void *> &values, koopa_raw_type_tag_t tag) const override;
 };
 
-// InitVal :: = Exp | "{"[Exp{"," Exp}] "}";
+// InitVal       ::= Exp | "{" [InitVal {"," InitVal}] "}";
 class InitValAST : public BaseAST
 {
 public:
@@ -401,7 +404,7 @@ public:
         ARRAY
     } type;
     std::unique_ptr<BaseAST> exp;
-    std::unique_ptr<std::vector<std::unique_ptr<BaseAST>>> exp_list;
+    std::unique_ptr<std::vector<std::unique_ptr<BaseAST>>> init_val_list;
 
     void Dump() const override;
     void *GenerateIR_ret() const override;
@@ -465,7 +468,7 @@ public:
     void GenerateIR_void() const override;
 };
 
-// LVal :: = IDENT["[" Exp "]"];
+// LVal          ::= IDENT {"[" Exp "]"};
 class LValAST : public BaseAST
 {
 public:
@@ -475,7 +478,7 @@ public:
         ARRAY
     } type;
     std::string ident;
-    std::unique_ptr<BaseAST> exp;
+    std::unique_ptr<std::vector<std::unique_ptr<BaseAST>>> exp_list;
 
     void Dump() const override;
     void *GetLeftValue() const override;

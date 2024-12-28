@@ -487,7 +487,7 @@ void ConstDefAST::GenerateIR_void(koopa_raw_type_tag_t tag) const
     }
     if (type == ARRAY)
     {
-        size_t size = const_exp->CalculateValue();
+        size_t size = 0;
 
         std::vector<const void *> init_vec;
         const_init_val->GenerateIR_void(init_vec);
@@ -517,12 +517,12 @@ void ConstDefAST::GenerateIR_void(koopa_raw_type_tag_t tag) const
 void ConstInitValAST::GenerateIR_void(std::vector<const void *> &init_vec) const
 {
     assert(type == ARRAY);
-    if (const_exp_list->size() > 0)
+    if (const_init_val_list->size() > 0)
     {
-        for (auto const_exp = (*const_exp_list).begin(); const_exp != (*const_exp_list).end();
-             const_exp++)
+        for (auto const_init_val = (*const_init_val_list).begin(); const_init_val != (*const_init_val_list).end();
+             const_init_val++)
         {
-            init_vec.push_back(generate_number((*const_exp)->CalculateValue()));
+            init_vec.push_back(generate_number((*const_init_val)->CalculateValue()));
         }
     }
 }
@@ -565,7 +565,7 @@ void VarDefAST::GenerateIR_void(koopa_raw_type_tag_t tag) const
     }
     if (type == ARRAY)
     {
-        size_t size = const_exp->CalculateValue();
+        size_t size = 0;
 
         std::vector<const void *> init_vec;
         koopa_raw_value_t init;
@@ -599,12 +599,12 @@ void VarDefAST::GenerateIR_void(koopa_raw_type_tag_t tag) const
 void InitValAST::GenerateIR_void(std::vector<const void *> &init_vec) const
 {
     assert(type == ARRAY);
-    if (exp_list->size() > 0)
+    if (init_val_list->size() > 0)
     {
-        for (auto exp = (*exp_list).begin(); exp != (*exp_list).end();
-             exp++)
+        for (auto init_val = (*init_val_list).begin(); init_val != (*init_val_list).end();
+             init_val++)
         {
-            init_vec.push_back(generate_number((*exp)->CalculateValue()));
+            init_vec.push_back(generate_number((*init_val)->CalculateValue()));
         }
     }
 }
@@ -781,10 +781,10 @@ void *LValAST::GenerateIR_ret() const
     }
     else if (value.type == SymbolTable::Value::Array)
     {
-        koopa_raw_value_data_t *src = generate_getelemptr_inst(value.data.array_value, (koopa_raw_value_t)exp->GenerateIR_ret());
-        ret = generate_load_inst(src);
-        block_list.add_inst(src);
-        block_list.add_inst(ret);
+        // koopa_raw_value_data_t *src = generate_getelemptr_inst(value.data.array_value, (koopa_raw_value_t)exp->GenerateIR_ret());
+        // ret = generate_load_inst(src);
+        // block_list.add_inst(src);
+        // block_list.add_inst(ret);
     }
     else
     {
@@ -1214,7 +1214,7 @@ void ConstDefAST::GenerateGlobalValues(std::vector<const void *> &values, koopa_
     }
     if (type == ARRAY)
     {
-        size_t size = const_exp->CalculateValue();
+        size_t size = 0;
 
         std::vector<const void *> init_vec;
         const_init_val->GenerateIR_void(init_vec);
@@ -1280,7 +1280,7 @@ void VarDefAST::GenerateGlobalValues(std::vector<const void *> &values, koopa_ra
     }
     else if (type == ARRAY)
     {
-        size_t size = const_exp->CalculateValue();
+        size_t size = 0;
         koopa_raw_value_t init;
         std::vector<const void *> init_vec;
         if (is_init)
@@ -1387,9 +1387,9 @@ void *LValAST::GetLeftValue() const
     }
     else if (value.type == SymbolTable::Value::Array)
     {
-        koopa_raw_value_data_t *ret = generate_getelemptr_inst(value.data.array_value, (koopa_raw_value_t)exp->GenerateIR_ret());
-        block_list.add_inst(ret);
-        return (void *)ret;
+        // koopa_raw_value_data_t *ret = generate_getelemptr_inst(value.data.array_value, (koopa_raw_value_t)exp->GenerateIR_ret());
+        // block_list.add_inst(ret);
+        // return (void *)ret;
     }
     assert(0);
     return nullptr;
@@ -1813,9 +1813,12 @@ void ConstDefAST::Dump() const
     std::cout << " " << ident;
     if (type == ARRAY)
     {
-        std::cout << "[";
-        const_exp->Dump();
-        std::cout << "]";
+        for (auto exp = (*const_exp_list).begin(); exp != (*const_exp_list).end(); exp++)
+        {
+            std::cout << "[";
+            (*exp)->Dump();
+            std::cout << "]";
+        }
     }
     std::cout << " =";
     const_init_val->Dump();
@@ -1832,13 +1835,14 @@ void ConstInitValAST::Dump() const
     else if (type == ARRAY)
     {
         std::cout << "{";
-        if ((*const_exp_list).size() > 0)
+        if ((*const_init_val_list).size() > 0)
         {
-            (*(*const_exp_list).begin())->Dump();
-            for (auto exp = (*const_exp_list).begin() + 1; exp != (*const_exp_list).end(); exp++)
+            (*(*const_init_val_list).begin())->Dump();
+            for (auto const_init_val = (*const_init_val_list).begin() + 1;
+                 const_init_val != (*const_init_val_list).end(); const_init_val++)
             {
-                std::cout << ",";
-                (*exp)->Dump();
+                std::cout << ", ";
+                (*const_init_val)->Dump();
             }
         }
         std::cout << "}";
@@ -1873,9 +1877,12 @@ void VarDefAST::Dump() const
     std::cout << " " << ident << " ";
     if (type == ARRAY)
     {
-        std::cout << "[";
-        const_exp->Dump();
-        std::cout << "]";
+        for (auto exp = (*const_exp_list).begin(); exp != (*const_exp_list).end(); exp++)
+        {
+            std::cout << "[";
+            (*exp)->Dump();
+            std::cout << "]";
+        }
     }
     if (is_init)
     {
@@ -1895,13 +1902,14 @@ void InitValAST::Dump() const
     else if (type == ARRAY)
     {
         std::cout << " {";
-        if ((*exp_list).size() > 0)
+        if ((*init_val_list).size() > 0)
         {
-            (*(*exp_list).begin())->Dump();
-            for (auto exp = (*exp_list).begin() + 1; exp != (*exp_list).end(); exp++)
+            (*(*init_val_list).begin())->Dump();
+            for (auto init_val = (*init_val_list).begin() + 1;
+                 init_val != (*init_val_list).end(); init_val++)
             {
-                std::cout << ",";
-                (*exp)->Dump();
+                std::cout << ", ";
+                (*init_val)->Dump();
             }
         }
         std::cout << "} ";
@@ -1991,9 +1999,12 @@ void LValAST::Dump() const
     std::cout << " " << ident << " ";
     if (type == ARRAY)
     {
-        std::cout << "[";
-        exp->Dump();
-        std::cout << "]";
+        for (auto exp = (*exp_list).begin(); exp != (*exp_list).end(); exp++)
+        {
+            std::cout << "[";
+            (*exp)->Dump();
+            std::cout << "]";
+        }
     }
     std::cout << "}";
 }
