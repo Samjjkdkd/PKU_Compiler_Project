@@ -1616,52 +1616,56 @@ void *LValAST::GetLeftValue() const
 
 void ConstInitValAST::ArrayInit(std::vector<const void *> &init_vec, std::vector<size_t> size_vec) const
 {
-    if (size_vec.size() == 0)
+    if (type != EMPTY)
     {
-        return;
-    }
-    for (auto init = (*const_init_val_list).begin(); init != (*const_init_val_list).end(); init++)
-    {
-        ConstInitValAST *init_val = dynamic_cast<ConstInitValAST *>((*init).get());
-        if (init_val->type == ConstInitValAST::INT)
+        for (auto init = (*const_init_val_list).begin(); init != (*const_init_val_list).end(); init++)
         {
-            init_vec.push_back(generate_number(init_val->const_exp->CalculateValue()));
-        }
-        else if (init_val->type == ConstInitValAST::ARRAY)
-        {
-            int cur_size = init_vec.size();
-            int len_n = size_vec.back();
-            assert(len_n != 0);
-            if (cur_size % len_n != 0)
+            ConstInitValAST *init_val = dynamic_cast<ConstInitValAST *>((*init).get());
+            if (init_val->type == ConstInitValAST::INT)
             {
-                // std::cout << "Error: array init size not match" << std::endl;
-                assert(0);
+                init_vec.push_back(generate_number(init_val->const_exp->CalculateValue()));
             }
-            int level = 1;
-            int total_size = len_n;
-            for (int i = size_vec.size() - 2; i > 0; i--)
+            else if (init_val->type == ConstInitValAST::ARRAY)
             {
-                total_size *= size_vec[i];
-                assert(total_size != 0);
-                if (cur_size % total_size != 0)
+                int cur_size = init_vec.size();
+                int len_n = size_vec.back();
+                assert(len_n != 0);
+                if (cur_size % len_n != 0)
                 {
-                    break;
+                    // std::cout << "Error: array init size not match" << std::endl;
+                    assert(0);
                 }
-                level++;
+                int level = 1;
+                int total_size = len_n;
+                for (int i = size_vec.size() - 2; i > 0; i--)
+                {
+                    total_size *= size_vec[i];
+                    assert(total_size != 0);
+                    if (cur_size % total_size != 0)
+                    {
+                        break;
+                    }
+                    level++;
+                }
+                std::vector<size_t> sub_size_vec;
+                for (int i = std::max(int(size_vec.size() - level), 1); i < size_vec.size(); i++)
+                {
+                    sub_size_vec.push_back(size_vec[i]);
+                }
+                init_val->ArrayInit(init_vec, sub_size_vec);
             }
-            std::vector<size_t> sub_size_vec;
-            for (int i = size_vec.size() - level; i < size_vec.size(); i++)
-            {
-                sub_size_vec.push_back(size_vec[i]);
-            }
-            init_val->ArrayInit(init_vec, sub_size_vec);
         }
-        else if (init_val->type == ConstInitValAST::EMPTY)
+    }
+    else
+    {
+        int size = 1;
+        for (int i = 0; i < size_vec.size(); i++)
         {
-            for (int i = 0; i < size_vec.back(); i++)
-            {
-                init_vec.push_back(generate_number(0));
-            }
+            size *= size_vec[i];
+        }
+        for (int i = 0; i < size; i++)
+        {
+            init_vec.push_back(generate_number(0));
         }
     }
     int total_size = 1;
@@ -1677,65 +1681,69 @@ void ConstInitValAST::ArrayInit(std::vector<const void *> &init_vec, std::vector
 
 void InitValAST::ArrayInit(std::vector<const void *> &init_vec, std::vector<size_t> size_vec) const
 {
-    if (size_vec.size() == 0)
+    if (type != EMPTY)
     {
-        return;
-    }
 #ifdef DEBUG2
-    std::cout << "size_vec.size() = " << size_vec.size() << std::endl;
+        std::cout << "size_vec.size() = " << size_vec.size() << std::endl;
 #endif
-    for (auto init = (*init_val_list).begin(); init != (*init_val_list).end(); init++)
-    {
-        InitValAST *init_val = dynamic_cast<InitValAST *>((*init).get());
-#ifdef DEBUG2
-        std::cout << "init_val->type = " << init_val->type << std::endl;
-#endif
-        if (init_val->type == InitValAST::INT)
+        for (auto init = (*init_val_list).begin(); init != (*init_val_list).end(); init++)
         {
-            init_vec.push_back(generate_number(init_val->exp->CalculateValue()));
-        }
-        else if (init_val->type == InitValAST::ARRAY)
-        {
-            int cur_size = init_vec.size();
-            int len_n = size_vec.back();
+            InitValAST *init_val = dynamic_cast<InitValAST *>((*init).get());
 #ifdef DEBUG2
-            std::cout << "cur_size = " << cur_size << std::endl;
-            std::cout << "len_n = " << len_n << std::endl;
+            std::cout << "init_val->type = " << init_val->type << std::endl;
 #endif
-            assert(len_n != 0);
-            if (cur_size % len_n != 0)
+            if (init_val->type == InitValAST::INT)
             {
-                // std::cout << "Error: array init size not match" << std::endl;
-                assert(0);
+                init_vec.push_back(generate_number(init_val->exp->CalculateValue()));
             }
-            int level = 1;
-            int total_size = len_n;
-            for (int i = size_vec.size() - 2; i > 0; i--)
+            else if (init_val->type == InitValAST::ARRAY)
             {
+                int cur_size = init_vec.size();
+                int len_n = size_vec.back();
 #ifdef DEBUG2
-                std::cout << "size_vec[" << i << "] = " << size_vec[i] << std::endl;
+                std::cout << "cur_size = " << cur_size << std::endl;
+                std::cout << "len_n = " << len_n << std::endl;
 #endif
-                total_size *= size_vec[i];
-                assert(total_size != 0);
-                if (cur_size % total_size != 0)
+                assert(len_n != 0);
+                if (cur_size % len_n != 0)
                 {
-                    break;
+                    // std::cout << "Error: array init size not match" << std::endl;
+                    assert(0);
                 }
-                level++;
+                int level = 1;
+                int total_size = len_n;
+                for (int i = size_vec.size() - 2; i > 0; i--)
+                {
+#ifdef DEBUG2
+                    std::cout << "size_vec[" << i << "] = " << size_vec[i] << std::endl;
+#endif
+                    total_size *= size_vec[i];
+                    assert(total_size != 0);
+                    if (cur_size % total_size != 0)
+                    {
+                        break;
+                    }
+                    level++;
+                }
+                std::vector<size_t> sub_size_vec;
+                for (int i = std::max(int(size_vec.size() - level), 1); i < size_vec.size(); i++)
+                {
+                    sub_size_vec.push_back(size_vec[i]);
+                }
+                init_val->ArrayInit(init_vec, sub_size_vec);
             }
-            std::vector<size_t> sub_size_vec;
-            for (int i = size_vec.size() - level; i < size_vec.size(); i++)
-            {
-                sub_size_vec.push_back(size_vec[i]);
-            }
-            init_val->ArrayInit(init_vec, sub_size_vec);
         }
-        else if (init_val->type == InitValAST::EMPTY)
+    }
+    else
+    {
+        int size = 1;
+        for (int i = 0; i < size_vec.size(); i++)
         {
-            for (int i = 0; i < size_vec.back(); i++)
-            {
-                init_vec.push_back(generate_number(0));
-            }
+            size *= size_vec[i];
+        }
+        for (int i = 0; i < size; i++)
+        {
+            init_vec.push_back(generate_number(0));
         }
     }
     int total_size = 1;
