@@ -1625,7 +1625,7 @@ void ConstInitValAST::ArrayInit(std::vector<const void *> &init_vec, std::vector
             {
                 init_vec.push_back(generate_number(init_val->const_exp->CalculateValue()));
             }
-            else if (init_val->type == ConstInitValAST::ARRAY)
+            else if (init_val->type == ConstInitValAST::ARRAY || init_val->type == ConstInitValAST::EMPTY)
             {
                 int cur_size = init_vec.size();
                 int len_n = size_vec.back();
@@ -1696,7 +1696,7 @@ void InitValAST::ArrayInit(std::vector<const void *> &init_vec, std::vector<size
             {
                 init_vec.push_back(generate_number(init_val->exp->CalculateValue()));
             }
-            else if (init_val->type == InitValAST::ARRAY)
+            else if (init_val->type == InitValAST::ARRAY || init_val->type == InitValAST::EMPTY)
             {
                 int cur_size = init_vec.size();
                 int len_n = size_vec.back();
