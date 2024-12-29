@@ -10,7 +10,8 @@
 #include "koopa.h"
 
 // #define DEBUG
-//  #define DEBUG2
+// #define DEBUG2
+// #define DEBUG3
 
 //  CompUnit      ::= Def {Def};
 //  Def           ::= Decl | FuncDef;
@@ -88,7 +89,8 @@ public:
             Var,
             Const,
             Func,
-            Array
+            Array,
+            Pointer
         } type;
         union Data
         {
@@ -96,6 +98,7 @@ public:
             koopa_raw_value_t var_value;
             koopa_raw_function_t func_value;
             koopa_raw_value_t array_value;
+            koopa_raw_value_t pointer_value;
         } data;
         Value() = default;
         Value(ValueType type, int value) : type(type)
@@ -112,6 +115,10 @@ public:
             else if (type == Array)
             {
                 data.array_value = value;
+            }
+            else if (type == Pointer)
+            {
+                data.pointer_value = value;
             }
         };
         Value(ValueType type, koopa_raw_function_t value) : type(type)
@@ -661,6 +668,7 @@ koopa_raw_basic_block_data_t *generate_block(std::string name);
 koopa_raw_value_data_t *generate_global_alloc(std::string ident, koopa_raw_value_t value, koopa_raw_type_t tag);
 koopa_raw_value_data_t *generate_alloc_inst(std::string ident, koopa_raw_type_t base);
 koopa_raw_value_data_t *generate_getelemptr_inst(koopa_raw_value_t src, koopa_raw_value_t index);
+koopa_raw_value_data_t *generate_getptr_inst(koopa_raw_value_t src, koopa_raw_value_t index);
 koopa_raw_value_data_t *generate_store_inst(koopa_raw_value_t dest, koopa_raw_value_t value);
 koopa_raw_value_data_t *generate_load_inst(koopa_raw_value_t src);
 koopa_raw_value_data_t *generate_binary_inst(koopa_raw_value_t lhs, koopa_raw_value_t rhs, koopa_raw_binary_op_t op);

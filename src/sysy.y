@@ -533,6 +533,8 @@ LVal
     auto ast = new LValAST();
     ast->type = LValAST::INT;
     ast->ident = *unique_ptr<string>($1);
+    auto vec = new vector<unique_ptr<BaseAST> >();
+    ast->exp_list = unique_ptr<vector<unique_ptr<BaseAST> >>(vec);
     $$ = ast;
   }
   | IDENT ExpList {

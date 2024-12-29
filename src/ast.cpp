@@ -41,6 +41,10 @@ SymbolTable::Value SymbolTable::get_value(std::string name)
                 std::cout << "Const " << value->second.data.const_value << std::endl;
             else if (value->second.type == SymbolTable::Value::Func)
                 std::cout << "Func " << (void *)value->second.data.func_value << std::endl;
+            else if (value->second.type == SymbolTable::Value::Array)
+                std::cout << "Array " << (void *)value->second.data.array_value << std::endl;
+            else if (value->second.type == SymbolTable::Value::Pointer)
+                std::cout << "Pointer " << (void *)value->second.data.pointer_value << std::endl;
             else
                 std::cout << "Error" << std::endl;
 
@@ -77,6 +81,12 @@ void SymbolTable::del_table()
             std::cout << "Const " << it->second.data.const_value << std::endl;
         else if (it->second.type == SymbolTable::Value::Func)
             std::cout << "Func " << (void *)it->second.data.func_value << std::endl;
+        else if (it->second.type == SymbolTable::Value::Array)
+            std::cout << "Array " << (void *)it->second.data.array_value << std::endl;
+        else if (it->second.type == SymbolTable::Value::Pointer)
+            std::cout << "Pointer " << (void *)it->second.data.pointer_value << std::endl;
+        else
+            std::cout << "Error" << std::endl;
     }
 #endif
     symbol_table_stack.pop_back();
@@ -348,9 +358,17 @@ void FuncDefAST::GenerateIR_void(std::vector<const void *> &funcs) const
     for (int i = 0; i < params.size(); i++)
     {
         koopa_raw_value_data_t *param = (koopa_raw_value_data_t *)params[i];
-        koopa_raw_value_data_t *alloc = generate_alloc_inst(param->name + 1, generate_type(KOOPA_RTT_INT32));
-        symbol_table.add_symbol(alloc->name + 1,
-                                SymbolTable::Value(SymbolTable::Value::Var, (koopa_raw_value_t)alloc));
+        koopa_raw_value_data_t *alloc = generate_alloc_inst(param->name + 1, param->ty);
+        if (param->ty->tag == KOOPA_RTT_INT32)
+        {
+            symbol_table.add_symbol(
+                alloc->name + 1, SymbolTable::Value(SymbolTable::Value::Var, (koopa_raw_value_t)alloc));
+        }
+        else
+        {
+            symbol_table.add_symbol(
+                alloc->name + 1, SymbolTable::Value(SymbolTable::Value::Pointer, (koopa_raw_value_t)alloc));
+        }
         block_list.add_inst(alloc);
         koopa_raw_value_data_t *store =
             generate_store_inst((koopa_raw_value_t)alloc, (koopa_raw_value_t)param);
@@ -401,7 +419,30 @@ void *FuncFParamAST::GenerateIR_ret() const
 #ifdef DEBUG
     std::cout << "FuncFParam" << std::endl;
 #endif
-    koopa_raw_type_t param_ty = (koopa_raw_type_t)btype->GenerateIR_ret();
+    koopa_raw_type_t param_ty;
+    koopa_raw_type_t ty = (koopa_raw_type_t)btype->GenerateIR_ret();
+    if (type == INT)
+    {
+        param_ty = ty;
+    }
+    else if (type == ARRAY)
+    {
+        if (const_exp_list->size() == 0)
+        {
+            param_ty = generate_type_pointer(ty);
+        }
+        else
+        {
+            std::vector<size_t> size_vec;
+            for (auto const_exp = (*const_exp_list).begin();
+                 const_exp != (*const_exp_list).end(); const_exp++)
+            {
+                size_t tmp = (*const_exp)->CalculateValue();
+                size_vec.push_back(tmp);
+            }
+            param_ty = generate_type_pointer(generate_linked_list_type(ty, size_vec));
+        }
+    }
     koopa_raw_value_data_t *ret = generate_func_arg_ref(param_ty, ident);
     return ret;
 }
@@ -820,7 +861,7 @@ void WhileExpAST::GenerateIR_void() const
 
 void *LValAST::GenerateIR_ret() const
 {
-#ifdef DEBUG
+#ifdef DEBUG3
     std::cout << "LVal" << std::endl;
 #endif
     SymbolTable::Value value = symbol_table.get_value(ident);
@@ -836,21 +877,69 @@ void *LValAST::GenerateIR_ret() const
     }
     else if (value.type == SymbolTable::Value::Array)
     {
-        std::vector<koopa_raw_value_data_t *> get_vec;
-        for (int i = 0; i < exp_list->size(); i++)
+        koopa_raw_value_t last = value.data.array_value;
+        if (exp_list->size() != 0)
         {
-            koopa_raw_value_data_t *get = generate_getelemptr_inst(value.data.array_value, (koopa_raw_value_t)(*exp_list)[i]->GenerateIR_ret());
-            get_vec.push_back(get);
+            for (int i = 0; i < exp_list->size(); i++)
+            {
+                koopa_raw_value_t index = (koopa_raw_value_t)(*exp_list)[i]->GenerateIR_ret();
+                koopa_raw_value_data_t *get = generate_getelemptr_inst(last, index);
+                block_list.add_inst(get);
+                last = (koopa_raw_value_t)get;
+            }
         }
-        get_vec[0]->kind.data.get_elem_ptr.src = value.data.array_value;
-        block_list.add_inst(get_vec[0]);
-        for (int i = 1; i < get_vec.size(); i++)
+        if (exp_list->size() == 0)
         {
-            get_vec[i]->kind.data.get_elem_ptr.src = (koopa_raw_value_t)get_vec[i - 1];
-            block_list.add_inst(get_vec[i]);
+            ret = generate_getelemptr_inst(last, generate_number(0));
+            block_list.add_inst(ret);
         }
-        ret = generate_load_inst((koopa_raw_value_t)get_vec.back());
-        block_list.add_inst(ret);
+        else if (last->ty->data.pointer.base->tag == KOOPA_RTT_ARRAY)
+        {
+            ret = generate_getelemptr_inst(last, generate_number(0));
+            block_list.add_inst(ret);
+        }
+        else
+        {
+            ret = generate_load_inst(last);
+            block_list.add_inst(ret);
+        }
+    }
+    else if (value.type == SymbolTable::Value::Pointer)
+    {
+        koopa_raw_value_data_t *load = generate_load_inst(value.data.pointer_value);
+        load->ty = value.data.pointer_value->ty->data.pointer.base;
+        block_list.add_inst(load);
+
+        koopa_raw_value_t last = value.data.pointer_value;
+        if (exp_list->size() != 0)
+        {
+            koopa_raw_value_t index = (koopa_raw_value_t)(*exp_list)[0]->GenerateIR_ret();
+            koopa_raw_value_data_t *get = generate_getptr_inst(load, index);
+            block_list.add_inst(get);
+            last = (koopa_raw_value_t)get;
+            for (int i = 1; i < exp_list->size(); i++)
+            {
+                index = (koopa_raw_value_t)(*exp_list)[i]->GenerateIR_ret();
+                get = generate_getelemptr_inst(last, index);
+                block_list.add_inst(get);
+                last = (koopa_raw_value_t)get;
+            }
+        }
+        if (exp_list->size() == 0)
+        {
+            ret = generate_getptr_inst(load, generate_number(0));
+            block_list.add_inst(ret);
+        }
+        else if (last->ty->data.pointer.base->tag == KOOPA_RTT_ARRAY)
+        {
+            ret = generate_getelemptr_inst(last, generate_number(0));
+            block_list.add_inst(ret);
+        }
+        else
+        {
+            ret = generate_load_inst(last);
+            block_list.add_inst(ret);
+        }
     }
     else
     {
@@ -1389,7 +1478,7 @@ void VarDefAST::GenerateGlobalValues(std::vector<const void *> &values, koopa_ra
         {
             init = generate_zero_init(generate_linked_list_type(generate_type(tag), size_vec));
         }
-        koopa_raw_value_data_t *ret = generate_global_alloc(ident, init, generate_type_array(generate_type(tag), size));
+        koopa_raw_value_data_t *ret = generate_global_alloc(ident, init, generate_linked_list_type(generate_type(tag), size_vec));
         symbol_table.add_symbol(ident, SymbolTable::Value(SymbolTable::Value::Array, (koopa_raw_value_t)ret));
         values.push_back(ret);
     }
@@ -1466,7 +1555,7 @@ void CompUnitAST::load_lib_funcs(std::vector<const void *> &funcs) const
 
 void *LValAST::GetLeftValue() const
 {
-#ifdef DEBUG
+#ifdef DEBUG3
     std::cout << "LVal::GetLeftValue" << std::endl;
 #endif
     SymbolTable::Value value = symbol_table.get_value(ident);
@@ -1485,6 +1574,41 @@ void *LValAST::GetLeftValue() const
             last = (koopa_raw_value_t)ret;
         }
         return (void *)last;
+    }
+    else if (value.type == SymbolTable::Value::Pointer)
+    {
+        koopa_raw_value_t last = value.data.pointer_value;
+        koopa_raw_value_data_t *load = generate_load_inst(last);
+        load->ty = last->ty->data.pointer.base;
+#ifdef DEBUG3
+        std::cout << "last->ty->data.pointer.base->tag = " << last->ty->data.pointer.base->tag << std::endl;
+#endif
+        block_list.add_inst(load);
+
+        koopa_raw_value_t index = (koopa_raw_value_t)(*exp_list)[0]->GenerateIR_ret();
+#ifdef DEBUG3
+        std::cout << "index = " << index->kind.data.integer.value << std::endl;
+#endif
+        koopa_raw_value_data_t *ret = generate_getptr_inst(load, index);
+        block_list.add_inst(ret);
+        last = (koopa_raw_value_t)ret;
+
+        for (int i = 1; i < exp_list->size(); i++)
+        {
+            index = (koopa_raw_value_t)(*exp_list)[i]->GenerateIR_ret();
+#ifdef DEBUG3
+            std::cout << "index = " << index->kind.data.integer.value << std::endl;
+#endif
+            ret = generate_getelemptr_inst(last, index);
+            block_list.add_inst(ret);
+            last = (koopa_raw_value_t)ret;
+        }
+        return (void *)last;
+    }
+    else
+    {
+        // std::cout << "Error: " << ident << " not found" << std::endl;
+        assert(0);
     }
     assert(0);
     return nullptr;
@@ -1568,7 +1692,7 @@ void InitValAST::ArrayInit(std::vector<const void *> &init_vec, std::vector<size
 #endif
         if (init_val->type == InitValAST::INT)
         {
-            init_vec.push_back(init_val->exp->GenerateIR_ret());
+            init_vec.push_back(generate_number(init_val->exp->CalculateValue()));
         }
         else if (init_val->type == InitValAST::ARRAY)
         {
@@ -1699,19 +1823,16 @@ koopa_raw_type_t generate_type_func(koopa_raw_type_t func_type, koopa_raw_slice_
 koopa_raw_type_t generate_linked_list_type(koopa_raw_type_t base, std::vector<size_t> size_vec)
 {
     std::vector<koopa_raw_type_kind_t *> type_vec;
-    for (auto size = size_vec.begin(); size != size_vec.end(); size++)
+    koopa_raw_type_t last = base;
+    for (auto size = size_vec.rbegin(); size != size_vec.rend(); size++)
     {
         koopa_raw_type_kind_t *type = new koopa_raw_type_kind_t();
         type->tag = KOOPA_RTT_ARRAY;
         type->data.array.len = *size;
-        type_vec.push_back(type);
+        type->data.array.base = last;
+        last = type;
     }
-    for (int i = 0; i < type_vec.size() - 1; i++)
-    {
-        type_vec[i]->data.array.base = type_vec[i + 1];
-    }
-    type_vec[type_vec.size() - 1]->data.array.base = base;
-    return type_vec[0];
+    return last;
 }
 
 koopa_raw_value_data_t *generate_number(int32_t number)
@@ -1835,12 +1956,30 @@ koopa_raw_value_data_t *generate_alloc_inst(std::string ident, koopa_raw_type_t 
 koopa_raw_value_data_t *generate_getelemptr_inst(koopa_raw_value_t src, koopa_raw_value_t index)
 {
     koopa_raw_value_data_t *ret = new koopa_raw_value_data();
-    ret->ty = generate_type_pointer(src->ty->data.array.base);
+    ret->ty = generate_type_pointer(src->ty->data.pointer.base->data.array.base);
     ret->name = nullptr;
     ret->used_by = generate_slice(KOOPA_RSIK_VALUE);
     ret->kind.tag = KOOPA_RVT_GET_ELEM_PTR;
+#ifdef DEBUG3
+    std::cout << "getelemptr" << src->ty->tag << std::endl;
+#endif
     ret->kind.data.get_elem_ptr.src = src;
     ret->kind.data.get_elem_ptr.index = index;
+    return ret;
+}
+
+koopa_raw_value_data_t *generate_getptr_inst(koopa_raw_value_t src, koopa_raw_value_t index)
+{
+    koopa_raw_value_data_t *ret = new koopa_raw_value_data();
+    ret->ty = src->ty;
+    ret->name = nullptr;
+    ret->used_by = generate_slice(KOOPA_RSIK_VALUE);
+    ret->kind.tag = KOOPA_RVT_GET_PTR;
+#ifdef DEBUG3
+    std::cout << "getptr" << src->ty->tag << std::endl;
+#endif
+    ret->kind.data.get_ptr.src = src;
+    ret->kind.data.get_ptr.index = index;
     return ret;
 }
 
@@ -1864,6 +2003,9 @@ koopa_raw_value_data_t *generate_load_inst(koopa_raw_value_t src)
     ret->name = nullptr;
     ret->used_by = generate_slice(KOOPA_RSIK_VALUE);
     ret->kind.tag = KOOPA_RVT_LOAD;
+#ifdef DEBUG3
+    std::cout << "load" << src->ty->tag << std::endl;
+#endif
     ret->kind.data.load.src = src;
     return ret;
 }
