@@ -19,7 +19,7 @@
 
 // FuncType      ::= "void" | "int";
 // FuncFParams   ::= FuncFParam {"," FuncFParam};
-// FuncFParam    ::= BType IDENT;
+// FuncFParam ::= BType IDENT ["[" "]" {"[" ConstExp "]"}];
 
 // Block         ::= "{" {BlockItem} "}";
 // BlockItem     ::= Decl | Stmt;
@@ -260,12 +260,18 @@ public:
 };
 
 // FuncFParams   ::= FuncFParam {"," FuncFParam};
-// FuncFParam    ::= BType IDENT;
+// FuncFParam ::= BType IDENT ["[" "]" {"[" ConstExp "]"}];
 class FuncFParamAST : public BaseAST
 {
 public:
+    enum
+    {
+        INT,
+        ARRAY
+    } type;
     std::unique_ptr<BaseAST> btype;
     std::string ident;
+    std::unique_ptr<std::vector<std::unique_ptr<BaseAST>>> const_exp_list;
 
     void Dump() const override;
     void *GenerateIR_ret() const override;

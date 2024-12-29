@@ -192,15 +192,15 @@ void BlockList::rearrange_block_list()
     if (block_list.size() == 0)
         return;
     is_visited[(koopa_raw_basic_block_data_t *)block_list[0]] = true;
-    for (size_t i = 1; i < block_list.size(); i++)
+    for (int i = 1; i < block_list.size(); i++)
     {
         auto block = (koopa_raw_basic_block_data_t *)block_list[i];
         is_visited[block] = false;
     }
-    for (size_t i = 0; i < block_list.size(); i++)
+    for (int i = 0; i < block_list.size(); i++)
     {
         auto block = (koopa_raw_basic_block_data_t *)block_list[i];
-        for (size_t j = 0; j < block->insts.len; j++)
+        for (int j = 0; j < block->insts.len; j++)
         {
             auto inst = (koopa_raw_value_t)block->insts.buffer[j];
             if (inst->kind.tag == KOOPA_RVT_JUMP)
@@ -214,7 +214,7 @@ void BlockList::rearrange_block_list()
             }
         }
     }
-    for (size_t i = 0; i < block_list.size(); i++)
+    for (int i = 0; i < block_list.size(); i++)
     {
         auto block = (koopa_raw_basic_block_data_t *)block_list[i];
         if (!is_visited[block])
@@ -345,7 +345,7 @@ void FuncDefAST::GenerateIR_void(std::vector<const void *> &funcs) const
     block_list.add_block(entry);
     symbol_table.add_table();
 
-    for (size_t i = 0; i < params.size(); i++)
+    for (int i = 0; i < params.size(); i++)
     {
         koopa_raw_value_data_t *param = (koopa_raw_value_data_t *)params[i];
         koopa_raw_value_data_t *alloc = generate_alloc_inst(param->name + 1, generate_type(KOOPA_RTT_INT32));
@@ -530,7 +530,7 @@ void *ConstInitValAST::GenerateIR_ret(std::vector<const void *> &init_vec, std::
     std::vector<const void *> *init_val = new std::vector<const void *>();
     if (level == size_vec.size() - 1)
     {
-        for (size_t i = 0; i < size_vec[level]; i++)
+        for (int i = 0; i < size_vec[level]; i++)
         {
             init_val->push_back(*init_vec.begin());
             init_vec.erase(init_vec.begin());
@@ -538,13 +538,13 @@ void *ConstInitValAST::GenerateIR_ret(std::vector<const void *> &init_vec, std::
     }
     else
     {
-        for (size_t i = 0; i < size_vec[level]; i++)
+        for (int i = 0; i < size_vec[level]; i++)
         {
             init_val->push_back(GenerateIR_ret(init_vec, size_vec, level + 1));
         }
     }
     std::vector<size_t> sub_size_vec;
-    for (size_t i = level; i < size_vec.size(); i++)
+    for (int i = level; i < size_vec.size(); i++)
     {
         sub_size_vec.push_back(size_vec[i]);
     }
@@ -641,7 +641,7 @@ void *InitValAST::GenerateIR_ret(std::vector<const void *> &init_vec, std::vecto
     std::vector<const void *> *init_val = new std::vector<const void *>();
     if (level == size_vec.size() - 1)
     {
-        for (size_t i = 0; i < size_vec[level]; i++)
+        for (int i = 0; i < size_vec[level]; i++)
         {
             init_val->push_back(*init_vec.begin());
             init_vec.erase(init_vec.begin());
@@ -649,13 +649,13 @@ void *InitValAST::GenerateIR_ret(std::vector<const void *> &init_vec, std::vecto
     }
     else
     {
-        for (size_t i = 0; i < size_vec[level]; i++)
+        for (int i = 0; i < size_vec[level]; i++)
         {
             init_val->push_back(GenerateIR_ret(init_vec, size_vec, level + 1));
         }
     }
     std::vector<size_t> sub_size_vec;
-    for (size_t i = level; i < size_vec.size(); i++)
+    for (int i = level; i < size_vec.size(); i++)
     {
         sub_size_vec.push_back(size_vec[i]);
     }
@@ -844,7 +844,7 @@ void *LValAST::GenerateIR_ret() const
         }
         get_vec[0]->kind.data.get_elem_ptr.src = value.data.array_value;
         block_list.add_inst(get_vec[0]);
-        for (size_t i = 1; i < get_vec.size(); i++)
+        for (int i = 1; i < get_vec.size(); i++)
         {
             get_vec[i]->kind.data.get_elem_ptr.src = (koopa_raw_value_t)get_vec[i - 1];
             block_list.add_inst(get_vec[i]);
@@ -1515,7 +1515,7 @@ void ConstInitValAST::ArrayInit(std::vector<const void *> &init_vec, std::vector
             }
             int level = 1;
             int total_size = len_n;
-            for (size_t i = size_vec.size() - 2; i > 0; i--)
+            for (int i = size_vec.size() - 2; i > 0; i--)
             {
                 total_size *= size_vec[i];
                 assert(total_size != 0);
@@ -1526,11 +1526,18 @@ void ConstInitValAST::ArrayInit(std::vector<const void *> &init_vec, std::vector
                 level++;
             }
             std::vector<size_t> sub_size_vec;
-            for (size_t i = size_vec.size() - level; i < size_vec.size(); i++)
+            for (int i = size_vec.size() - level; i < size_vec.size(); i++)
             {
                 sub_size_vec.push_back(size_vec[i]);
             }
             init_val->ArrayInit(init_vec, sub_size_vec);
+        }
+        else if (init_val->type == ConstInitValAST::EMPTY)
+        {
+            for (int i = 0; i < size_vec.back(); i++)
+            {
+                init_vec.push_back(generate_number(0));
+            }
         }
     }
     int total_size = 1;
@@ -1593,11 +1600,18 @@ void InitValAST::ArrayInit(std::vector<const void *> &init_vec, std::vector<size
                 level++;
             }
             std::vector<size_t> sub_size_vec;
-            for (size_t i = size_vec.size() - level; i < size_vec.size(); i++)
+            for (int i = size_vec.size() - level; i < size_vec.size(); i++)
             {
                 sub_size_vec.push_back(size_vec[i]);
             }
             init_val->ArrayInit(init_vec, sub_size_vec);
+        }
+        else if (init_val->type == InitValAST::EMPTY)
+        {
+            for (int i = 0; i < size_vec.back(); i++)
+            {
+                init_vec.push_back(generate_number(0));
+            }
         }
     }
     int total_size = 1;
@@ -1774,7 +1788,7 @@ koopa_raw_function_data_t *generate_function(std::string ident, std::vector<cons
     else
     {
         std::vector<const void *> params_ty;
-        for (size_t i = 0; i < params.size(); i++)
+        for (int i = 0; i < params.size(); i++)
         {
             params_ty.push_back(((koopa_raw_value_data_t *)params[i])->ty);
         }
@@ -1975,6 +1989,17 @@ void FuncFParamAST::Dump() const
     std::cout << "FuncFParam{";
     btype->Dump();
     std::cout << " " << ident << " ";
+    if (type == ARRAY)
+    {
+        std::cout << "[]";
+        for (auto exp = (*const_exp_list).begin(); exp != (*const_exp_list).end(); exp++)
+        {
+            std::cout << "[";
+            (*exp)->Dump();
+            std::cout << "]";
+        }
+    }
+
     std::cout << "}";
 }
 

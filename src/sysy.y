@@ -153,8 +153,26 @@ FuncFParamList
 FuncFParam
   : Type IDENT {
     auto ast = new FuncFParamAST();
+    ast->type = FuncFParamAST::INT;
     ast->btype = unique_ptr<BaseAST>($1);
     ast->ident = *unique_ptr<string>($2);
+    $$ = ast;
+  }
+  | Type IDENT '[' ']' {
+    auto ast = new FuncFParamAST();
+    ast->type = FuncFParamAST::ARRAY;
+    ast->btype = unique_ptr<BaseAST>($1);
+    ast->ident = *unique_ptr<string>($2);
+    auto vec = new vector<unique_ptr<BaseAST> >();
+    ast->const_exp_list = unique_ptr<vector<unique_ptr<BaseAST> >>(vec);
+    $$ = ast;
+  }
+  | Type IDENT '[' ']' ConstExpList {
+    auto ast = new FuncFParamAST();
+    ast->type = FuncFParamAST::ARRAY;
+    ast->btype = unique_ptr<BaseAST>($1);
+    ast->ident = *unique_ptr<string>($2);
+    ast->const_exp_list = unique_ptr<vector<unique_ptr<BaseAST> >>($5);
     $$ = ast;
   }
   ;
