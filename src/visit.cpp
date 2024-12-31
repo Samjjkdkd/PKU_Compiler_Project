@@ -25,16 +25,6 @@ void Stack::init()
 /**********************************************PtrSizeVec**************************************************/
 /**********************************************************************************************************/
 
-void PtrSizeVec::push_size(koopa_raw_value_t value, int size)
-{
-    size_vec[value].push_back(size);
-}
-
-void PtrSizeVec::push_size_vec_iter(koopa_raw_value_t value)
-{
-    size_vec_iter[value] = std::make_pair(size_vec[value].begin(), size_vec[value].end());
-}
-
 int PtrSizeVec::get_value_total_size(koopa_raw_value_t value)
 {
     int offset = 4;
@@ -45,33 +35,41 @@ int PtrSizeVec::get_value_total_size(koopa_raw_value_t value)
     return offset;
 }
 
+int PtrSizeVec::get_value_offset(koopa_raw_value_t src)
+{
+    auto it = size_vec[src].begin();
+    ++it;
+    int offset = 4;
+    for (; it != size_vec[src].end(); it++)
+    {
+        offset *= (*it);
+    }
+    return offset;
+}
+
+void PtrSizeVec::push_size(koopa_raw_value_t value, int size)
+{
+    size_vec[value].push_back(size);
+}
+
 void PtrSizeVec::copy_size_vec(koopa_raw_value_t dest, koopa_raw_value_t src)
 {
-    if (size_vec_iter.find(src) != size_vec_iter.end())
+    if (size_vec.find(src) != size_vec.end())
     {
-        size_vec_iter[dest] = size_vec_iter[src];
+        size_vec[dest] = size_vec[src];
     }
 }
 
 void PtrSizeVec::copy_size_vec_ptr(koopa_raw_value_t dest, koopa_raw_value_t src)
 {
-    const auto &begin_end = size_vec_iter[src];
-    auto first = begin_end.first;
-    first++;
-    size_vec_iter[dest] = std::make_pair(first, begin_end.second);
-}
-
-int PtrSizeVec::get_value_offset(koopa_raw_value_t src)
-{
-    const auto &begin_end = size_vec_iter[src];
-    int offset = 4;
-    auto it = begin_end.first;
-    ++it;
-    for (; it != begin_end.second; it++)
+    auto it = size_vec[src].begin();
+    it++;
+    std::vector<int> tmp;
+    for (; it != size_vec[src].end(); it++)
     {
-        offset *= (*it);
+        tmp.push_back(*it);
     }
-    return offset;
+    size_vec[dest] = tmp;
 }
 
 /**********************************************************************************************************/
@@ -169,7 +167,7 @@ void Visit(const koopa_raw_function_t &func)
                     arrmem *= base->data.array.len;
                     base = base->data.array.base;
                 }
-                ptr_size_vec.push_size_vec_iter(inst);
+                // ptr_size_vec.push_size_vec_iter(inst);
                 var_count += arrmem;
             }
         }
@@ -245,7 +243,7 @@ void Visit(const koopa_raw_value_t &value)
                 ptr_size_vec.push_size(value, base->data.array.len);
                 base = base->data.array.base;
             }
-            ptr_size_vec.push_size_vec_iter(value);
+            // ptr_size_vec.push_size_vec_iter(value);
             stack.alloc_value(value, stack.pos);
             stack.pos += 4;
         }
@@ -505,7 +503,7 @@ void Visit(const koopa_raw_global_alloc_t &global_alloc, const koopa_raw_value_t
                 size *= base->data.array.len;
                 base = base->data.array.base;
             }
-            ptr_size_vec.push_size_vec_iter(value);
+            // ptr_size_vec.push_size_vec_iter(value);
             std::cout << "  .zero " << size << std::endl;
         }
     }
@@ -522,7 +520,7 @@ void Visit(const koopa_raw_global_alloc_t &global_alloc, const koopa_raw_value_t
             ptr_size_vec.push_size(value, base->data.array.len);
             base = base->data.array.base;
         }
-        ptr_size_vec.push_size_vec_iter(value);
+        // ptr_size_vec.push_size_vec_iter(value);
         aggregate_init(global_alloc.init);
     }
     std::cout << std::endl;

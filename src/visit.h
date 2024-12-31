@@ -37,19 +37,16 @@ static int ra_count = 0;
 /**********************************************PtrSizeVec**************************************************/
 /**********************************************************************************************************/
 
-typedef std::pair<std::vector<int>::iterator, std::vector<int>::iterator> vec_iter;
 class PtrSizeVec
 {
 public:
-    void push_size_vec_iter(koopa_raw_value_t value);
     int get_value_offset(koopa_raw_value_t src);
-    void push_size(koopa_raw_value_t value, int size);
     int get_value_total_size(koopa_raw_value_t value);
+    void push_size(koopa_raw_value_t value, int size);
     void copy_size_vec(koopa_raw_value_t dest, koopa_raw_value_t src);
     void copy_size_vec_ptr(koopa_raw_value_t dest, koopa_raw_value_t src);
 
 private:
-    std::unordered_map<koopa_raw_value_t, vec_iter> size_vec_iter;
     std::unordered_map<koopa_raw_value_t, std::vector<int>> size_vec;
 };
 
