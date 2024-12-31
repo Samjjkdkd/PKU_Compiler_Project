@@ -537,13 +537,17 @@ void ConstDefAST::GenerateIR_void(koopa_raw_type_tag_t tag) const
             size_vec.push_back(tmp);
             size *= tmp;
         }
+        koopa_raw_value_data_t *ret =
+            generate_alloc_inst(ident, generate_linked_list_type(generate_type(tag), size_vec));
+        symbol_table.add_symbol(ident, SymbolTable::Value(SymbolTable::Value::Array, (koopa_raw_value_t)ret));
+        block_list.add_inst(ret);
 
         std::vector<const void *> init_vec;
         ConstInitValAST *constinitval = dynamic_cast<ConstInitValAST *>(const_init_val.get());
-        koopa_raw_value_t init;
         if (constinitval->type == ConstInitValAST::EMPTY)
         {
-            init = generate_zero_init(generate_linked_list_type(generate_type(tag), size_vec));
+            koopa_raw_value_data_t *store = generate_store_inst(ret, generate_zero_init(generate_linked_list_type(generate_type(tag), size_vec)));
+            block_list.add_inst(store);
         }
         else
         {
@@ -553,14 +557,40 @@ void ConstDefAST::GenerateIR_void(koopa_raw_type_tag_t tag) const
                 std::cout << "Error: Array size not match" << std::endl;
                 assert(0);
             }
-            init = (koopa_raw_value_t)const_init_val->GenerateIR_ret(init_vec, size_vec, 0);
+            std::vector<koopa_raw_value_data_t *> get_vec;
+            for (int i = 0; i < size; i++)
+            {
+                int tmp = i;
+                int tmp_size = size;
+                for (int j = 0; j < size_vec.size(); j++)
+                {
+                    tmp_size /= size_vec[j];
+                    int index = tmp / tmp_size;
+                    tmp = tmp % tmp_size;
+                    if (j < get_vec.size())
+                    {
+                        if (index == get_vec[j]->kind.data.get_elem_ptr.index->kind.data.integer.value)
+                        {
+                            continue;
+                        }
+                        else
+                        {
+                            while (j < get_vec.size())
+                            {
+                                get_vec.pop_back();
+                            }
+                        }
+                    }
+                    koopa_raw_value_t src = j == 0 ? (koopa_raw_value_t)ret : (koopa_raw_value_t)get_vec[j - 1];
+                    koopa_raw_value_data_t *get = generate_getelemptr_inst(src, generate_number(index));
+                    get_vec.push_back(get);
+                    block_list.add_inst(get);
+                }
+                koopa_raw_value_data_t *store =
+                    generate_store_inst((koopa_raw_value_t)get_vec[size_vec.size() - 1], (koopa_raw_value_t)init_vec[i]);
+                block_list.add_inst(store);
+            }
         }
-        koopa_raw_value_data_t *ret =
-            generate_alloc_inst(ident, generate_linked_list_type(generate_type(tag), size_vec));
-        symbol_table.add_symbol(ident, SymbolTable::Value(SymbolTable::Value::Array, (koopa_raw_value_t)ret));
-        block_list.add_inst(ret);
-        koopa_raw_value_data_t *store = generate_store_inst((koopa_raw_value_t)ret, init);
-        block_list.add_inst(store);
         return;
     }
 }
@@ -641,15 +671,19 @@ void VarDefAST::GenerateIR_void(koopa_raw_type_tag_t tag) const
             size_vec.push_back(tmp);
             size *= tmp;
         }
+        koopa_raw_value_data_t *ret =
+            generate_alloc_inst(ident, generate_linked_list_type(generate_type(tag), size_vec));
+        symbol_table.add_symbol(ident, SymbolTable::Value(SymbolTable::Value::Array, (koopa_raw_value_t)ret));
+        block_list.add_inst(ret);
 
-        koopa_raw_value_t init;
         if (is_init)
         {
             std::vector<const void *> init_vec;
             InitValAST *initval = dynamic_cast<InitValAST *>(init_val.get());
             if (initval->type == InitValAST::EMPTY)
             {
-                init = generate_zero_init(generate_linked_list_type(generate_type(tag), size_vec));
+                koopa_raw_value_data_t *store = generate_store_inst(ret, generate_zero_init(generate_linked_list_type(generate_type(tag), size_vec)));
+                block_list.add_inst(store);
             }
             else
             {
@@ -659,19 +693,46 @@ void VarDefAST::GenerateIR_void(koopa_raw_type_tag_t tag) const
                     std::cout << "Error: Array size not match" << std::endl;
                     assert(0);
                 }
-                init = (koopa_raw_value_t)init_val->GenerateIR_ret(init_vec, size_vec, 0);
+                std::vector<koopa_raw_value_data_t *> get_vec;
+                for (int i = 0; i < size; i++)
+                {
+                    int tmp = i;
+                    int tmp_size = size;
+                    for (int j = 0; j < size_vec.size(); j++)
+                    {
+                        tmp_size /= size_vec[j];
+                        int index = tmp / tmp_size;
+                        tmp = tmp % tmp_size;
+                        if (j < get_vec.size())
+                        {
+                            if (index == get_vec[j]->kind.data.get_elem_ptr.index->kind.data.integer.value)
+                            {
+                                continue;
+                            }
+                            else
+                            {
+                                while (j < get_vec.size())
+                                {
+                                    get_vec.pop_back();
+                                }
+                            }
+                        }
+                        koopa_raw_value_t src = j == 0 ? (koopa_raw_value_t)ret : (koopa_raw_value_t)get_vec[j - 1];
+                        koopa_raw_value_data_t *get = generate_getelemptr_inst(src, generate_number(index));
+                        get_vec.push_back(get);
+                        block_list.add_inst(get);
+                    }
+                    koopa_raw_value_data_t *store =
+                        generate_store_inst((koopa_raw_value_t)get_vec[size_vec.size() - 1], (koopa_raw_value_t)init_vec[i]);
+                    block_list.add_inst(store);
+                }
             }
         }
         else
         {
-            init = generate_zero_init(generate_linked_list_type(generate_type(tag), size_vec));
+            koopa_raw_value_data_t *store = generate_store_inst(ret, generate_zero_init(generate_linked_list_type(generate_type(tag), size_vec)));
+            block_list.add_inst(store);
         }
-        koopa_raw_value_data_t *ret =
-            generate_alloc_inst(ident, generate_linked_list_type(generate_type(tag), size_vec));
-        symbol_table.add_symbol(ident, SymbolTable::Value(SymbolTable::Value::Array, (koopa_raw_value_t)ret));
-        block_list.add_inst(ret);
-        koopa_raw_value_data_t *store = generate_store_inst((koopa_raw_value_t)ret, init);
-        block_list.add_inst(store);
         return;
     }
 }

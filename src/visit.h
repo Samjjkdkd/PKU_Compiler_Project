@@ -32,6 +32,29 @@ private:
 
 static Stack stack;
 
+static int ra_count = 0;
+/**********************************************************************************************************/
+/**********************************************PtrSizeVec**************************************************/
+/**********************************************************************************************************/
+
+typedef std::pair<std::vector<int>::iterator, std::vector<int>::iterator> vec_iter;
+class PtrSizeVec
+{
+public:
+    void push_size_vec_iter(koopa_raw_value_t value);
+    int get_value_offset(koopa_raw_value_t src);
+    void push_size(koopa_raw_value_t value, int size);
+    int get_value_total_size(koopa_raw_value_t value);
+    void copy_size_vec(koopa_raw_value_t dest, koopa_raw_value_t src);
+    void copy_size_vec_ptr(koopa_raw_value_t dest, koopa_raw_value_t src);
+
+private:
+    std::unordered_map<koopa_raw_value_t, vec_iter> size_vec_iter;
+    std::unordered_map<koopa_raw_value_t, std::vector<int>> size_vec;
+};
+
+static PtrSizeVec ptr_size_vec;
+
 /**********************************************************************************************************/
 /************************************************Visit*****************************************************/
 /**********************************************************************************************************/
@@ -51,22 +74,26 @@ void Visit(const koopa_raw_basic_block_t &bb);
 // 访问指令
 void Visit(const koopa_raw_value_t &value);
 
-// 访问 return 指令
-void Visit(const koopa_raw_return_t &value);
-
 // 访问 integer 指令
-void Visit(const koopa_raw_integer_t &value);
+void Visit(const koopa_raw_integer_t &integer);
 
-// 访问 binary 指令
-void Visit(const koopa_raw_binary_t &binary,
-           const koopa_raw_value_t &value);
+// 访问 global alloc 指令
+void Visit(const koopa_raw_global_alloc_t &global_alloc, const koopa_raw_value_t &value);
 
 // 访问 load 指令
-void Visit(const koopa_raw_load_t &load,
-           const koopa_raw_value_t &value);
+void Visit(const koopa_raw_load_t &load, const koopa_raw_value_t &value);
 
 // 访问 store 指令
-void Visit(const koopa_raw_store_t &value);
+void Visit(const koopa_raw_store_t &store);
+
+// 访问 getptr 指令
+void Visit(const koopa_raw_get_ptr_t &get_ptr, const koopa_raw_value_t &value);
+
+// 访问 getelemptr 指令
+void Visit(const koopa_raw_get_elem_ptr_t &get_elem_ptr, const koopa_raw_value_t &value);
+
+// 访问 binary 指令
+void Visit(const koopa_raw_binary_t &binary, const koopa_raw_value_t &value);
 
 // 访问 branch 指令
 void Visit(const koopa_raw_branch_t &branch);
@@ -77,18 +104,38 @@ void Visit(const koopa_raw_jump_t &jump);
 // 访问 call 指令
 void Visit(const koopa_raw_call_t &call, const koopa_raw_value_t &value);
 
-// 访问 global_alloc 指令
-void Visit(const koopa_raw_global_alloc_t &global_alloc, const koopa_raw_value_t &value);
+// 访问 return 指令
+void Visit(const koopa_raw_return_t &ret);
 
 /**********************************************************************************************************/
 /************************************************Utils*****************************************************/
 /**********************************************************************************************************/
 
-// 将 value 加载到 reg 中
-void load_reg(const koopa_raw_value_t &value, std::string reg);
+// 生成数组/指针的 (global) alloc 语句 -> 该数组/指针的维数.
+// [[i32, 2], 3] -> 3, 2; **[[i32, 2], 3] ->  1, 1, 3, 2
+static std::unordered_map<koopa_raw_value_t, std::vector<int>> dimvec;
+// getelemptr 和 getptr 语句 -> 生成的指针的维数,
+// 表示为 dimvec 中的 vector 的某段的 begin 和 end
+typedef std::pair<std::vector<int>::iterator, std::vector<int>::iterator> pvitvit;
+static std::unordered_map<koopa_raw_value_t, pvitvit> dimlr;
+
+// 将 stack 中的值 加载到 reg 中
+void loadstack_reg(const koopa_raw_value_t &value, const std::string &reg);
+
+// 将 value 的存放地址加载到 reg 中
+void loadaddr_reg(const koopa_raw_value_t &value, const std::string &reg);
+
+// 将 int 加载到 reg 中
+void loadint_reg(int value, const std::string &reg);
 
 // 将 reg 中的值存回 value
-void save_reg(const koopa_raw_value_t &value, std::string reg);
+void save_reg(const koopa_raw_value_t &value, const std::string &reg);
+
+// 判断 value 是否为指针
+bool value_is_ptr(const koopa_raw_value_t &value);
+
+// 生成aggregate
+void aggregate_init(const koopa_raw_value_t &value);
 
 // 处理偏移量超出范围
 void deal_offset_exceed(int offset, std::string inst, std::string reg);
