@@ -773,7 +773,6 @@ std::string deal_offset_exceed(int offset, std::string inst, std::string reg)
         else
         {
             ret += "  addi sp, sp, -" + std::to_string(offset) + "\n";
-            ret += "  addi sp, sp, -" + std::to_string(offset) + "\n";
         }
     }
     else if (inst == "addi+")
