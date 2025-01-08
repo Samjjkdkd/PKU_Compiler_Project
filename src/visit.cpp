@@ -77,19 +77,24 @@ void PtrSizeVec::copy_size_vec_ptr(koopa_raw_value_t dest, koopa_raw_value_t src
 /**********************************************************************************************************/
 
 // 访问 raw program
-void Visit(const koopa_raw_program_t &program)
+std::string Visit(const koopa_raw_program_t &program)
 {
     // 执行一些其他的必要操作
     // ...
     // 访问所有全局变量
-    Visit(program.values);
+    std::string ret = "";
+
+    ret += Visit(program.values);
     // 访问所有函数
-    Visit(program.funcs);
+    ret += Visit(program.funcs);
+
+    return ret;
 }
 
 // 访问 raw slice
-void Visit(const koopa_raw_slice_t &slice)
+std::string Visit(const koopa_raw_slice_t &slice)
 {
+    std::string ret = "";
     for (size_t i = 0; i < slice.len; ++i)
     {
         auto ptr = slice.buffer[i];
@@ -98,34 +103,36 @@ void Visit(const koopa_raw_slice_t &slice)
         {
         case KOOPA_RSIK_FUNCTION:
             // 访问函数
-            Visit(reinterpret_cast<koopa_raw_function_t>(ptr));
+            ret += Visit(reinterpret_cast<koopa_raw_function_t>(ptr));
             break;
         case KOOPA_RSIK_BASIC_BLOCK:
             // 访问基本块
-            Visit(reinterpret_cast<koopa_raw_basic_block_t>(ptr));
+            ret += Visit(reinterpret_cast<koopa_raw_basic_block_t>(ptr));
             break;
         case KOOPA_RSIK_VALUE:
             // 访问指令
-            Visit(reinterpret_cast<koopa_raw_value_t>(ptr));
+            ret += Visit(reinterpret_cast<koopa_raw_value_t>(ptr));
             break;
         default:
             // 我们暂时不会遇到其他内容, 于是不对其做任何处理
             assert(false);
         }
     }
+    return ret;
 }
 
 // 访问函数
-void Visit(const koopa_raw_function_t &func)
+std::string Visit(const koopa_raw_function_t &func)
 {
     // 忽略函数声明
+    std::string ret = "";
     if (func->bbs.len == 0)
-        return;
+        return ret;
 
     // 执行一些其他的必要操作
-    std::cout << "  .text" << std::endl;
-    std::cout << "  .globl " << func->name + 1 << std::endl;
-    std::cout << func->name + 1 << ":" << std::endl;
+    ret += "  .text\n";
+    ret += "  .globl " + std::string(func->name + 1) + "\n";
+    ret += std::string(func->name + 1) + ":\n";
 
     // 清空
     stack.init();
@@ -167,7 +174,6 @@ void Visit(const koopa_raw_function_t &func)
                     arrmem *= base->data.array.len;
                     base = base->data.array.base;
                 }
-                // ptr_size_vec.push_size_vec_iter(inst);
                 var_count += arrmem;
             }
         }
@@ -180,43 +186,47 @@ void Visit(const koopa_raw_function_t &func)
 
     if (stack.len != 0)
     {
-        deal_offset_exceed(stack.len, "addi-", "t0");
+        ret += deal_offset_exceed(stack.len, "addi-", "t0");
     }
 
     if (ra_count)
     {
-        deal_offset_exceed(stack.len - 4, "sw", "ra");
+        ret += deal_offset_exceed(stack.len - 4, "sw", "ra");
     }
 
     // 访问所有基本块
-    Visit(func->bbs);
-    std::cout << std::endl;
+    ret += Visit(func->bbs);
+    ret += "\n";
+    return ret;
 }
 
 // 访问基本块
-void Visit(const koopa_raw_basic_block_t &bb)
+std::string Visit(const koopa_raw_basic_block_t &bb)
 {
+    std::string ret = "";
     // 执行一些其他的必要操作
     // 当前块的label, %entry开头的不打印
     if (strncmp(bb->name + strlen(bb->name) - 5, "entry", 5) != 0)
     {
-        std::cout << bb->name + 1 << ":" << std::endl;
+        ret += std::string(bb->name + 1) + ":\n";
     }
     // 访问所有指令
-    Visit(bb->insts);
+    ret += Visit(bb->insts);
+    return ret;
 }
 
 // 访问指令
-void Visit(const koopa_raw_value_t &value)
+std::string Visit(const koopa_raw_value_t &value)
 {
     // 根据指令类型判断后续需要如何访问
+    std::string ret = "";
     const auto &kind = value->kind;
     koopa_raw_type_t base;
     switch (kind.tag)
     {
     case KOOPA_RVT_INTEGER:
         // 访问 integer 指令
-        Visit(kind.data.integer);
+        ret += Visit(kind.data.integer);
         break;
     case KOOPA_RVT_ALLOC:
         base = value->ty->data.pointer.base;
@@ -243,149 +253,152 @@ void Visit(const koopa_raw_value_t &value)
                 ptr_size_vec.push_size(value, base->data.array.len);
                 base = base->data.array.base;
             }
-            // ptr_size_vec.push_size_vec_iter(value);
             stack.alloc_value(value, stack.pos);
             stack.pos += 4;
         }
         break;
     case KOOPA_RVT_GLOBAL_ALLOC:
         // 访问 global alloc 指令
-        Visit(value->kind.data.global_alloc, value);
+        ret += Visit(value->kind.data.global_alloc, value);
         break;
     case KOOPA_RVT_LOAD:
         // 访问 load 指令
-        Visit(kind.data.load, value);
+        ret += Visit(kind.data.load, value);
         break;
     case KOOPA_RVT_STORE:
         // 访问 store 指令
-        Visit(kind.data.store);
+        ret += Visit(kind.data.store);
         break;
     case KOOPA_RVT_GET_PTR:
         // 访问 getptr 指令
-        Visit(kind.data.get_ptr, value);
+        ret += Visit(kind.data.get_ptr, value);
         break;
     case KOOPA_RVT_GET_ELEM_PTR:
         // 访问 getelemptr 指令
-        Visit(kind.data.get_elem_ptr, value);
+        ret += Visit(kind.data.get_elem_ptr, value);
         break;
     case KOOPA_RVT_BINARY:
         // 访问 binary 指令
-        Visit(kind.data.binary, value);
+        ret += Visit(kind.data.binary, value);
         break;
     case KOOPA_RVT_BRANCH:
         // 访问 branch 指令
-        Visit(kind.data.branch);
+        ret += Visit(kind.data.branch);
         break;
     case KOOPA_RVT_JUMP:
         // 访问 jump 指令
-        Visit(kind.data.jump);
+        ret += Visit(kind.data.jump);
         break;
     case KOOPA_RVT_CALL:
         // 访问 call 指令
-        Visit(kind.data.call, value);
+        ret += Visit(kind.data.call, value);
         break;
     case KOOPA_RVT_RETURN:
         // 访问 return 指令
-        Visit(kind.data.ret);
+        ret += Visit(kind.data.ret);
         break;
     default:
         // 其他类型暂时遇不到
         assert(false);
         break;
     }
+    return ret;
 }
 
 // 访问 return 指令
-void Visit(const koopa_raw_return_t &ret)
+std::string Visit(const koopa_raw_return_t &ret_inst)
 {
+    std::string ret = "";
     // 返回值存入 a0
-    if (ret.value != nullptr)
+    if (ret_inst.value != nullptr)
     {
-        loadstack_reg(ret.value, "a0");
+        ret += loadstack_reg(ret_inst.value, "a0");
     }
     // 从栈帧中恢复 ra 寄存器
     if (ra_count)
     {
-        deal_offset_exceed(stack.len - 4, "lw", "ra");
+        ret += deal_offset_exceed(stack.len - 4, "lw", "ra");
     }
     // 恢复栈帧
     if (stack.len != 0)
     {
-        deal_offset_exceed(stack.len, "addi+", "t0");
+        ret += deal_offset_exceed(stack.len, "addi+", "t0");
     }
-    std::cout << "  ret" << std::endl;
+    ret += "  ret\n";
+    return ret;
 }
 
 // 访问 integer 指令
-void Visit(const koopa_raw_integer_t &integer)
+std::string Visit(const koopa_raw_integer_t &integer)
 {
-    std::cout << "  li a0, " << integer.value << std::endl;
+    return "  li a0, " + std::to_string(integer.value) + "\n";
 }
 
 // 访问 binary 指令
-void Visit(const koopa_raw_binary_t &binary, const koopa_raw_value_t &value)
+std::string Visit(const koopa_raw_binary_t &binary, const koopa_raw_value_t &value)
 {
+    std::string ret = "";
     // 将运算数存入 t0 和 t1
-    loadstack_reg(binary.lhs, "t0");
-    loadstack_reg(binary.rhs, "t1");
+    ret += loadstack_reg(binary.lhs, "t0");
+    ret += loadstack_reg(binary.rhs, "t1");
 
     // 进行运算
     switch (binary.op)
     {
     case KOOPA_RBO_ADD:
-        std::cout << "  add t0, t0, t1" << std::endl;
+        ret += "  add t0, t0, t1\n";
         break;
     case KOOPA_RBO_SUB:
-        std::cout << "  sub t0, t0, t1" << std::endl;
+        ret += "  sub t0, t0, t1\n";
         break;
     case KOOPA_RBO_MUL:
-        std::cout << "  mul t0, t0, t1" << std::endl;
+        ret += "  mul t0, t0, t1\n";
         break;
     case KOOPA_RBO_DIV:
-        std::cout << "  div t0, t0, t1" << std::endl;
+        ret += "  div t0, t0, t1\n";
         break;
     case KOOPA_RBO_MOD:
-        std::cout << "  rem t0, t0, t1" << std::endl;
+        ret += "  rem t0, t0, t1\n";
         break;
     case KOOPA_RBO_AND:
-        std::cout << "  and t0, t0, t1" << std::endl;
+        ret += "  and t0, t0, t1\n";
         break;
     case KOOPA_RBO_OR:
-        std::cout << "  or t0, t0, t1" << std::endl;
+        ret += "  or t0, t0, t1\n";
         break;
     case KOOPA_RBO_XOR:
-        std::cout << "  xor t0, t0, t1" << std::endl;
+        ret += "  xor t0, t0, t1\n";
         break;
     case KOOPA_RBO_SHL:
-        std::cout << "  sll t0, t0, t1" << std::endl;
+        ret += "  sll t0, t0, t1\n";
         break;
     case KOOPA_RBO_SHR:
-        std::cout << "  srl t0, t0, t1" << std::endl;
+        ret += "  srl t0, t0, t1\n";
         break;
     case KOOPA_RBO_SAR:
-        std::cout << "  sra t0, t0, t1" << std::endl;
+        ret += "  sra t0, t0, t1\n";
         break;
     case KOOPA_RBO_EQ:
-        std::cout << " xor t0, t0, t1" << std::endl;
-        std::cout << "  seqz t0, t0" << std::endl;
+        ret += "  xor t0, t0, t1\n";
+        ret += "  seqz t0, t0\n";
         break;
     case KOOPA_RBO_NOT_EQ:
-        std::cout << " xor t0, t0, t1" << std::endl;
-        std::cout << "  snez t0, t0" << std::endl;
+        ret += "  xor t0, t0, t1\n";
+        ret += "  snez t0, t0\n";
         break;
     case KOOPA_RBO_GT:
-        std::cout << "  slt t0, t1, t0" << std::endl;
+        ret += "  slt t0, t1, t0\n";
         break;
     case KOOPA_RBO_LT:
-        std::cout << "  slt t0, t0, t1" << std::endl;
+        ret += "  slt t0, t0, t1\n";
         break;
     case KOOPA_RBO_GE:
-        std::cout << "  slt t0, t0, t1" << std::endl;
-        std::cout << "  xori t0, t0, 1" << std::endl;
+        ret += "  slt t0, t0, t1\n";
+        ret += "  xori t0, t0, 1\n";
         break;
     case KOOPA_RBO_LE:
-        std::cout << "  slt t0, t1, t0" << std::endl;
-        std::cout << "  xori t0, t0, 1" << std::endl;
+        ret += "  slt t0, t1, t0\n";
+        ret += "  xori t0, t0, 1\n";
         break;
     }
 
@@ -394,18 +407,20 @@ void Visit(const koopa_raw_binary_t &binary, const koopa_raw_value_t &value)
     {
         stack.alloc_value(value, stack.pos);
         stack.pos += 4;
-        save_reg(value, "t0");
+        ret += save_reg(value, "t0");
     }
+    return ret;
 }
 
 // 访问 load 指令
-void Visit(const koopa_raw_load_t &load, const koopa_raw_value_t &value)
+std::string Visit(const koopa_raw_load_t &load, const koopa_raw_value_t &value)
 {
-    loadstack_reg(load.src, "t0");
+    std::string ret = "";
+    ret += loadstack_reg(load.src, "t0");
 
     if (value_is_ptr(load.src))
     {
-        std::cout << "  lw t0, 0(t0)" << std::endl;
+        ret += "  lw t0, 0(t0)\n";
     }
 
     if (value->ty->tag != KOOPA_RTT_UNIT)
@@ -414,85 +429,94 @@ void Visit(const koopa_raw_load_t &load, const koopa_raw_value_t &value)
         // 存入栈
         stack.alloc_value(value, stack.pos);
         stack.pos += 4;
-        save_reg(value, "t0");
+        ret += save_reg(value, "t0");
     }
+    return ret;
 }
 
 // 访问 store 指令
-void Visit(const koopa_raw_store_t &store)
+std::string Visit(const koopa_raw_store_t &store)
 {
-    loadstack_reg(store.value, "t0");
+    std::string ret = "";
+    ret += loadstack_reg(store.value, "t0");
 
     if (value_is_ptr(store.value))
     {
-        std::cout << "  lw t0, 0(t0)" << std::endl;
+        ret += "  lw t0, 0(t0)\n";
     }
-    loadaddr_reg(store.dest, "t1");
+    ret += loadaddr_reg(store.dest, "t1");
     if (value_is_ptr(store.dest))
     {
-        std::cout << "  lw t1, 0(t1)" << std::endl;
+        ret += "  lw t1, 0(t1)\n";
     }
-    std::cout << "  sw t0, 0(t1)" << std::endl;
+    ret += "  sw t0, 0(t1)\n";
+    return ret;
 }
 
 // 访问 branch 指令
-void Visit(const koopa_raw_branch_t &branch)
+std::string Visit(const koopa_raw_branch_t &branch)
 {
-    loadstack_reg(branch.cond, "t0");
-    std::cout << "  bnez t0, DOUBLE_JUMP_" << branch.true_bb->name + 1 << std::endl;
-    std::cout << "  j " << branch.false_bb->name + 1 << std::endl;
-    std::cout << "DOUBLE_JUMP_" << branch.true_bb->name + 1 << ":" << std::endl;
-    std::cout << "  j " << branch.true_bb->name + 1 << std::endl;
+    std::string ret = "";
+    ret += loadstack_reg(branch.cond, "t0");
+    ret += "  bnez t0, DOUBLE_JUMP_" + std::string(branch.true_bb->name + 1) + "\n";
+    ret += "  j " + std::string(branch.false_bb->name + 1) + "\n";
+    ret += "DOUBLE_JUMP_" + std::string(branch.true_bb->name + 1) + ":\n";
+    ret += "  j " + std::string(branch.true_bb->name + 1) + "\n";
+    return ret;
 }
 
 // 访问 jump 指令
-void Visit(const koopa_raw_jump_t &jump)
+std::string Visit(const koopa_raw_jump_t &jump)
 {
-    std::cout << "  j " << jump.target->name + 1 << std::endl;
+    std::string ret = "";
+    ret += "  j " + std::string(jump.target->name + 1) + "\n";
+    return ret;
 }
 
 // 访问 call 指令
-void Visit(const koopa_raw_call_t &call, const koopa_raw_value_t &value)
+std::string Visit(const koopa_raw_call_t &call, const koopa_raw_value_t &value)
 {
+    std::string ret = "";
     // 处理参数
     for (size_t i = 0; i < call.args.len; ++i)
     {
         auto arg = reinterpret_cast<koopa_raw_value_t>(call.args.buffer[i]);
         if (i < 8)
         {
-            loadstack_reg(arg, "a" + std::to_string(i));
+            ret += loadstack_reg(arg, "a" + std::to_string(i));
         }
         else
         {
-            loadstack_reg(arg, "t0");
-            deal_offset_exceed((i - 8) * 4, "sw", "t0");
+            ret += loadstack_reg(arg, "t0");
+            ret += deal_offset_exceed((i - 8) * 4, "sw", "t0");
         }
     }
     // call half
-    std::cout << "  call " << call.callee->name + 1 << std::endl;
-
+    ret += "  call " + std::string(call.callee->name + 1) + "\n";
     // 若有返回值则将 a0 中的结果存入栈
     if (value->ty->tag != KOOPA_RTT_UNIT)
     {
         stack.alloc_value(value, stack.pos);
         stack.pos += 4;
-        save_reg(value, "a0");
+        ret += save_reg(value, "a0");
     }
+    return ret;
 }
 
 // 访问 global alloc 指令
-void Visit(const koopa_raw_global_alloc_t &global_alloc, const koopa_raw_value_t &value)
+std::string Visit(const koopa_raw_global_alloc_t &global_alloc, const koopa_raw_value_t &value)
 {
-    std::cout << "  .data" << std::endl;
-    std::cout << "  .globl " << value->name + 1 << std::endl;
-    std::cout << value->name + 1 << ":" << std::endl;
+    std::string ret = "";
+    ret += "  .data\n";
+    ret += "  .globl " + std::string(value->name + 1) + "\n";
+    ret += std::string(value->name + 1) + ":\n";
     if (global_alloc.init->kind.tag == KOOPA_RVT_ZERO_INIT)
     {
         // 初始化为 0
         auto base = value->ty->data.pointer.base;
         if (base->tag == KOOPA_RTT_INT32)
         {
-            std::cout << "  .zero 4" << std::endl;
+            ret += "  .zero 4\n";
         }
         else if (base->tag == KOOPA_RTT_ARRAY)
         {
@@ -503,13 +527,12 @@ void Visit(const koopa_raw_global_alloc_t &global_alloc, const koopa_raw_value_t
                 size *= base->data.array.len;
                 base = base->data.array.base;
             }
-            // ptr_size_vec.push_size_vec_iter(value);
-            std::cout << "  .zero " << size << std::endl;
+            ret += "  .zero " + std::to_string(size) + "\n";
         }
     }
     if (global_alloc.init->kind.tag == KOOPA_RVT_INTEGER)
     {
-        std::cout << "  .word " << global_alloc.init->kind.data.integer.value << std::endl;
+        ret += "  .word " + std::to_string(global_alloc.init->kind.data.integer.value) + "\n";
     }
     else if (global_alloc.init->kind.tag == KOOPA_RVT_AGGREGATE)
     {
@@ -520,26 +543,27 @@ void Visit(const koopa_raw_global_alloc_t &global_alloc, const koopa_raw_value_t
             ptr_size_vec.push_size(value, base->data.array.len);
             base = base->data.array.base;
         }
-        // ptr_size_vec.push_size_vec_iter(value);
-        aggregate_init(global_alloc.init);
+        ret += aggregate_init(global_alloc.init);
     }
-    std::cout << std::endl;
+    ret += "\n";
+    return ret;
 }
 
 // 访问 getptr 指令
-void Visit(const koopa_raw_get_ptr_t &get_ptr, const koopa_raw_value_t &value)
+std::string Visit(const koopa_raw_get_ptr_t &get_ptr, const koopa_raw_value_t &value)
 {
-    loadaddr_reg(get_ptr.src, "t0");
+    std::string ret = "";
+    ret += loadaddr_reg(get_ptr.src, "t0");
     if (value_is_ptr(get_ptr.src))
     {
-        std::cout << "  lw t0, 0(t0)" << std::endl;
+        ret += "  lw t0, 0(t0)\n";
     }
 
     int offset = ptr_size_vec.get_value_offset(get_ptr.src);
-    loadstack_reg(get_ptr.index, "t1");
-    loadint_reg(offset, "t2");
-    std::cout << "  mul t1, t1, t2" << std::endl;
-    std::cout << "  add t0, t0, t1" << std::endl;
+    ret += loadstack_reg(get_ptr.index, "t1");
+    ret += loadint_reg(offset, "t2");
+    ret += "  mul t1, t1, t2\n";
+    ret += "  add t0, t0, t1\n";
 
     // 若有返回值则将 t0 中的结果存入栈
     if (value->ty->tag != KOOPA_RTT_UNIT)
@@ -548,24 +572,26 @@ void Visit(const koopa_raw_get_ptr_t &get_ptr, const koopa_raw_value_t &value)
         // 存入栈
         stack.alloc_value(value, stack.pos);
         stack.pos += 4;
-        save_reg(value, "t0");
+        ret += save_reg(value, "t0");
     }
+    return ret;
 }
 
 // 访问 getelemptr 指令
-void Visit(const koopa_raw_get_elem_ptr_t &get_elem_ptr, const koopa_raw_value_t &value)
+std::string Visit(const koopa_raw_get_elem_ptr_t &get_elem_ptr, const koopa_raw_value_t &value)
 {
-    loadaddr_reg(get_elem_ptr.src, "t0");
+    std::string ret = "";
+    ret += loadaddr_reg(get_elem_ptr.src, "t0");
     if (value_is_ptr(get_elem_ptr.src))
     {
-        std::cout << "  lw t0, 0(t0)" << std::endl;
+        ret += "  lw t0, 0(t0)\n";
     }
 
     int offset = ptr_size_vec.get_value_offset(get_elem_ptr.src);
-    loadstack_reg(get_elem_ptr.index, "t1");
-    loadint_reg(offset, "t2");
-    std::cout << "  mul t1, t1, t2" << std::endl;
-    std::cout << "  add t0, t0, t1" << std::endl;
+    ret += loadstack_reg(get_elem_ptr.index, "t1");
+    ret += loadint_reg(offset, "t2");
+    ret += "  mul t1, t1, t2\n";
+    ret += "  add t0, t0, t1\n";
 
     // 若有返回值则将 t0 中的结果存入栈
     if (value->ty->tag != KOOPA_RTT_UNIT)
@@ -574,75 +600,83 @@ void Visit(const koopa_raw_get_elem_ptr_t &get_elem_ptr, const koopa_raw_value_t
         // 存入栈
         stack.alloc_value(value, stack.pos);
         stack.pos += 4;
-        save_reg(value, "t0");
+        ret += save_reg(value, "t0");
     }
+    return ret;
 }
 
 /**********************************************************************************************************/
 /************************************************Utils*****************************************************/
 /**********************************************************************************************************/
 
-void loadstack_reg(const koopa_raw_value_t &value, const std::string &reg)
+std::string loadstack_reg(const koopa_raw_value_t &value, const std::string &reg)
 {
     int index;
+    std::string ret = "";
     switch (value->kind.tag)
     {
     case KOOPA_RVT_INTEGER:
-        loadint_reg(value->kind.data.integer.value, reg);
+        ret += loadint_reg(value->kind.data.integer.value, reg);
         break;
     case KOOPA_RVT_FUNC_ARG_REF:
         index = value->kind.data.func_arg_ref.index;
         if (index < 8)
         {
-            std::cout << "  mv " << reg << ", a" << index << std::endl;
+            ret += "  mv " + reg + ", a" + std::to_string(index) + "\n";
         }
         else
         {
-            deal_offset_exceed(stack.len + (index - 8) * 4, "lw", reg);
+            ret += deal_offset_exceed(stack.len + (index - 8) * 4, "lw", reg);
         }
         break;
     case KOOPA_RVT_GLOBAL_ALLOC:
-        std::cout << "  la t1, " << value->name + 1 << std::endl;
-        std::cout << "  lw " << reg << ", 0(t1)" << std::endl;
+        ret += "  la t1, " + std::string(value->name + 1) + "\n";
+        ret += "  lw " + reg + ", 0(t1)\n";
         break;
     default:
         // 一定保存在栈里, 或者是全局符号
-        deal_offset_exceed(stack.get_loc(value), "lw", reg);
+        ret += deal_offset_exceed(stack.get_loc(value), "lw", reg);
         break;
     }
+    return ret;
 }
 
 // 将 value 的值放置在标号为 reg 的寄存器中
-void loadint_reg(int value, const std::string &reg)
+std::string loadint_reg(int value, const std::string &reg)
 {
-    std::cout << "  li " << reg << ", " << value << std::endl;
+    std::string ret = "";
+    ret += "  li " + reg + ", " + std::to_string(value) + "\n";
+    return ret;
 }
 
 // 将 value 的地址放置在标号为 reg 的寄存器中
-void loadaddr_reg(const koopa_raw_value_t &value, const std::string &reg)
+std::string loadaddr_reg(const koopa_raw_value_t &value, const std::string &reg)
 {
+    std::string ret = "";
     int index;
     switch (value->kind.tag)
     {
     case KOOPA_RVT_FUNC_ARG_REF:
         index = value->kind.data.func_arg_ref.index;
         assert(index >= 8);
-        loadint_reg(stack.len + (index - 8) * 4, reg);
-        std::cout << "  add " << reg << ", " << reg << ", sp" << std::endl;
+        ret += loadint_reg(stack.len + (index - 8) * 4, reg);
+        ret += "  add " + reg + ", " + reg + ", sp\n";
         break;
     case KOOPA_RVT_GLOBAL_ALLOC:
-        std::cout << "  la " << reg << ", " << value->name + 1 << std::endl;
+        ret += "  la " + reg + ", " + std::string(value->name + 1) + "\n";
         break;
     default:
-        loadint_reg(stack.get_loc(value), reg);
-        std::cout << "  add " << reg << ", " << reg << ", sp" << std::endl;
+        ret += loadint_reg(stack.get_loc(value), reg);
+        ret += "  add " + reg + ", " + reg + ", sp\n";
         break;
     }
+    return ret;
 }
 
 // 将标号为 reg 的寄存器中的value的值保存在内存中
-void save_reg(const koopa_raw_value_t &value, const std::string &reg)
+std::string save_reg(const koopa_raw_value_t &value, const std::string &reg)
 {
+    std::string ret = "";
     assert(value->kind.tag != KOOPA_RVT_INTEGER);
     int offset;
     int index;
@@ -651,35 +685,38 @@ void save_reg(const koopa_raw_value_t &value, const std::string &reg)
     case KOOPA_RVT_FUNC_ARG_REF:
         index = value->kind.data.func_arg_ref.index;
         assert(index >= 8);
-        deal_offset_exceed(stack.len + (index - 8) * 4, "sw", reg);
+        ret += deal_offset_exceed(stack.len + (index - 8) * 4, "sw", reg);
         break;
     case KOOPA_RVT_GLOBAL_ALLOC:
-        std::cout << "  la " << reg << ", " << value->name + 1 << std::endl;
-        std::cout << "  sw " << reg << ", 0(t1)" << std::endl;
+        ret += "  la t1, " + std::string(value->name + 1) + "\n";
+        ret += "  sw " + reg + ", 0(t1)\n";
         break;
     default:
         offset = stack.get_loc(value);
-        deal_offset_exceed(offset, "sw", reg);
+        ret += deal_offset_exceed(offset, "sw", reg);
         break;
     }
+    return ret;
 }
 
 // 遍历 agg 并输出为一系列 .word 格式
-void aggregate_init(const koopa_raw_value_t &value)
+std::string aggregate_init(const koopa_raw_value_t &value)
 {
+    std::string ret = "";
     if (value->kind.tag == KOOPA_RVT_INTEGER)
     {
         // 到叶子了
-        std::cout << "  .word " << value->kind.data.integer.value << std::endl;
+        ret += "  .word " + std::to_string(value->kind.data.integer.value) + "\n";
     }
     else if (value->kind.tag == KOOPA_RVT_AGGREGATE)
     {
         const auto &agg = value->kind.data.aggregate;
         for (int i = 0; i < agg.elems.len; i++)
         {
-            aggregate_init(reinterpret_cast<koopa_raw_value_t>(agg.elems.buffer[i]));
+            ret += aggregate_init(reinterpret_cast<koopa_raw_value_t>(agg.elems.buffer[i]));
         }
     }
+    return ret;
 }
 
 // value->kind.tag 为 KOOPA_RVT_GET_PTR 或 KOOPA_RVT_GET_ELEM_PTR,
@@ -700,8 +737,9 @@ bool value_is_ptr(const koopa_raw_value_t &value)
     return 0;
 }
 
-void deal_offset_exceed(int offset, std::string inst, std::string reg)
+std::string deal_offset_exceed(int offset, std::string inst, std::string reg)
 {
+    std::string ret = "";
     if (inst == "lw" || inst == "sw")
     {
         if (offset < -2048 || offset > 2047)
@@ -711,42 +749,44 @@ void deal_offset_exceed(int offset, std::string inst, std::string reg)
 
             if (new_base_offset < -2048 || new_base_offset > 2047)
             {
-                std::cout << "  li t1, " << new_base_offset << std::endl;
-                std::cout << "  add t1, t1, sp" << std::endl;
+                ret += "  li t1, " + std::to_string(new_base_offset) + "\n";
+                ret += "  add t1, t1, sp\n";
             }
             else
             {
-                std::cout << "  addi t1, sp, " << new_base_offset << std::endl;
+                ret += "  addi t1, sp, " + std::to_string(new_base_offset) + "\n";
             }
-            std::cout << "  " << inst << " " << reg << ", " << remaining_offset << "(t1)" << std::endl;
+            ret += "  " + inst + " " + reg + ", " + std::to_string(remaining_offset) + "(t1)\n";
         }
         else
         {
-            std::cout << "  " << inst << " " << reg << ", " << offset << "(sp)" << std::endl;
+            ret += "  " + inst + " " + reg + ", " + std::to_string(offset) + "(sp)\n";
         }
     }
     else if (inst == "addi-")
     {
         if (offset < -2048 || offset > 2047)
         {
-            std::cout << "  li " << reg << ", " << offset << std::endl;
-            std::cout << "  sub sp, sp, " << reg << std::endl;
+            ret += "  li " + reg + ", " + std::to_string(offset) + "\n";
+            ret += "  sub sp, sp, " + reg + "\n";
         }
         else
         {
-            std::cout << "  addi sp, sp, -" << offset << std::endl;
+            ret += "  addi sp, sp, -" + std::to_string(offset) + "\n";
+            ret += "  addi sp, sp, -" + std::to_string(offset) + "\n";
         }
     }
     else if (inst == "addi+")
     {
         if (offset < -2048 || offset > 2047)
         {
-            std::cout << "  li " << reg << ", " << offset << std::endl;
-            std::cout << "  add sp, sp, " << reg << std::endl;
+            ret += "  li " + reg + ", " + std::to_string(offset) + "\n";
+            ret += "  add sp, sp, " + reg + "\n";
         }
         else
         {
-            std::cout << "  addi sp, sp, " << offset << std::endl;
+            ret += "  addi sp, sp, " + std::to_string(offset) + "\n";
         }
     }
+    return ret;
 }

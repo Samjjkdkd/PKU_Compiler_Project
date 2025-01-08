@@ -79,11 +79,25 @@ int main(int argc, const char *argv[])
     koopa_raw_program_t raw = koopa_build_raw_program(builder, program);
     koopa_delete_program(program);
     streambuf *oldcoutbuf = cout.rdbuf(fout.rdbuf());
-    Visit(raw);
+    string ret = "";
+    ret += Visit(raw);
+    cout << ret;
     cout.rdbuf(oldcoutbuf);
     fout.close();
     koopa_delete_raw_program_builder(builder);
   }
-
+  else if (string(mode) == "-perf")
+  {
+    koopa_raw_program_builder_t builder = koopa_new_raw_program_builder();
+    koopa_raw_program_t raw = koopa_build_raw_program(builder, program);
+    koopa_delete_program(program);
+    streambuf *oldcoutbuf = cout.rdbuf(fout.rdbuf());
+    string ret = "";
+    ret += Visit(raw);
+    cout << ret;
+    cout.rdbuf(oldcoutbuf);
+    fout.close();
+    koopa_delete_raw_program_builder(builder);
+  }
   return 0;
 }
