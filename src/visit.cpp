@@ -845,7 +845,6 @@ std::string optimize_riscv_code(const std::string &riscv_code)
         // 如果是加载指令 (lw)，尝试进行优化
         else if (is_lw(trimmed_code_part))
         {
-            sw_detected = false; // 重置标志位
             if (sw_detected)
             {
                 std::string lw_instr, lw_dst, lw_addr, sw_instr, sw_src, sw_addr;
@@ -878,11 +877,13 @@ std::string optimize_riscv_code(const std::string &riscv_code)
                     // 使用 mv 替代 lw，避免冗余的内存加载
                     if (lw_dst != sw_src)
                     {
-                        result << "  mv " << lw_dst << ", " << lw_dst << comment_part << std::endl;
+                        result << "  mv " << lw_dst << ", " << sw_src << comment_part << std::endl;
                     }
-                    continue; // 跳过当前的 lw 指令
+                    sw_detected = false; // 重置标志位
+                    continue;            // 跳过当前的 lw 指令
                 }
             }
+            sw_detected = false; // 重置标志位
         }
         else
         {

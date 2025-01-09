@@ -1,5 +1,8 @@
 # Yuhui Xie's Compiler Principle lab project
 
+## Optimization
+1. original: 618.11s
+
 ## libkoopa
 
 #### **koopa_error_code**: 
@@ -9,7 +12,8 @@
 ```c++
         /// No errors occurred.
         KOOPA_EC_SUCCESS = 0,
-        /// UTF-8 string conversion error.
+        /// UTF-8 st
+        ring conversion error.
         KOOPA_EC_INVALID_UTF8_STRING,
         /// File operation error.
         KOOPA_EC_INVALID_FILE,
