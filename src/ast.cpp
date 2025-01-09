@@ -730,8 +730,8 @@ void VarDefAST::GenerateIR_void(koopa_raw_type_tag_t tag) const
         }
         else
         {
-            koopa_raw_value_data_t *store = generate_store_inst(ret, generate_zero_init(generate_linked_list_type(generate_type(tag), size_vec)));
-            block_list.add_inst(store);
+            // koopa_raw_value_data_t *store = generate_store_inst(ret, generate_zero_init(generate_linked_list_type(generate_type(tag), size_vec)));
+            // block_list.add_inst(store);
         }
         return;
     }
@@ -971,7 +971,7 @@ void *LValAST::GenerateIR_ret() const
         load->ty = value.data.pointer_value->ty->data.pointer.base;
         block_list.add_inst(load);
 
-        koopa_raw_value_t last = value.data.pointer_value;
+        koopa_raw_value_t last = nullptr; // value.data.pointer_value;
         if (exp_list->size() != 0)
         {
             koopa_raw_value_t index = (koopa_raw_value_t)(*exp_list)[0]->GenerateIR_ret();
