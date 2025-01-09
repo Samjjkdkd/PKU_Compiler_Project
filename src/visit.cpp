@@ -88,7 +88,9 @@ std::string Visit(const koopa_raw_program_t &program)
     // 访问所有函数
     ret += Visit(program.funcs);
 
-    return ret;
+    std::string optimized_code = optimize_riscv_code(ret);
+
+    return optimized_code;
 }
 
 // 访问 raw slice
@@ -788,4 +790,106 @@ std::string deal_offset_exceed(int offset, std::string inst, std::string reg)
         }
     }
     return ret;
+}
+
+// 函数：检查给定行是否是存储指令（sw）
+bool is_sw(const std::string &line)
+{
+    return line.find("sw") == 0;
+}
+
+// 函数：检查给定行是否是加载指令（lw）
+bool is_lw(const std::string &line)
+{
+    return line.find("lw") == 0;
+}
+
+// 函数：处理并优化 RISC-V 汇编代码
+std::string optimize_riscv_code(const std::string &riscv_code)
+{
+    std::stringstream result;
+    std::istringstream code_stream(riscv_code);
+    std::string line, prev_sw;
+    bool sw_detected = false;
+
+    // 逐行处理汇编代码
+    while (std::getline(code_stream, line))
+    {
+        std::string code_part = line;
+        size_t comment_pos = line.find('#');
+        std::string comment_part = "";
+        if (comment_pos != std::string::npos)
+        {
+            code_part = line.substr(0, comment_pos); // 获取指令部分
+            comment_part = line.substr(comment_pos); // 获取注释部分
+        }
+
+        // 去除空格并保留原有格式
+        std::string trimmed_code_part = code_part;
+        trimmed_code_part.erase(std::remove_if(trimmed_code_part.begin(), trimmed_code_part.end(), ::isspace), trimmed_code_part.end());
+
+        // 忽略空行
+        if (trimmed_code_part.empty())
+        {
+            result << line << std::endl;
+            continue;
+        }
+
+        // 如果是存储指令 (sw)，记录当前存储的寄存器
+        if (is_sw(trimmed_code_part))
+        {
+            prev_sw = trimmed_code_part;
+            // prev_lw.clear(); // 清除之前的 lw
+            sw_detected = true;
+        }
+        // 如果是加载指令 (lw)，尝试进行优化
+        else if (is_lw(trimmed_code_part))
+        {
+            sw_detected = false; // 重置标志位
+            if (sw_detected)
+            {
+                std::string lw_instr, lw_dst, lw_addr, sw_instr, sw_src, sw_addr;
+                size_t comma_pos;
+                lw_instr = trimmed_code_part.substr(0, 2); // "lw"
+
+                // 查找寄存器和偏移部分的分隔符 ','
+                comma_pos = trimmed_code_part.find(',');
+
+                // 提取寄存器部分（从第3个字符开始，到逗号位置）
+                lw_dst = trimmed_code_part.substr(2, comma_pos - 2); // "t0"
+
+                // 提取偏移部分（从逗号后开始）
+                lw_addr = trimmed_code_part.substr(comma_pos + 1); // "4(sp)"
+                // 判断 lw 载入的地址与前一个 sw 存储的地址是否一致，且寄存器一致
+
+                sw_instr = prev_sw.substr(0, 2); // "lw"
+
+                // 查找寄存器和偏移部分的分隔符 ','
+                comma_pos = prev_sw.find(',');
+
+                // 提取寄存器部分（从第3个字符开始，到逗号位置）
+                sw_src = prev_sw.substr(2, comma_pos - 2); // "t0"
+
+                // 提取偏移部分（从逗号后开始）
+                sw_addr = prev_sw.substr(comma_pos + 1); // "4(sp)"
+
+                if (lw_dst != "" && sw_src != "" && lw_addr == sw_addr)
+                {
+                    // 使用 mv 替代 lw，避免冗余的内存加载
+                    if (lw_dst != sw_src)
+                    {
+                        result << "  mv " << lw_dst << ", " << lw_dst << comment_part << std::endl;
+                    }
+                    continue; // 跳过当前的 lw 指令
+                }
+            }
+        }
+        else
+        {
+            sw_detected = false;
+        }
+        result << line << std::endl;
+    }
+
+    return result.str();
 }

@@ -4,6 +4,7 @@
 #include <cassert>
 #include <iostream>
 #include <algorithm>
+#include <sstream>
 #include <string.h>
 #include "koopa.h"
 
@@ -136,3 +137,7 @@ std::string aggregate_init(const koopa_raw_value_t &value);
 
 // 处理偏移量超出范围
 std::string deal_offset_exceed(int offset, std::string inst, std::string reg);
+
+bool is_sw(const std::string &line);
+bool is_lw(const std::string &line);
+std::string optimize_riscv_code(const std::string &riscv_code);
