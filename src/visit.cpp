@@ -83,9 +83,14 @@ std::string Visit(const koopa_raw_program_t &program)
     // ...
     // 访问所有全局变量
     std::string ret = "";
-
+#ifdef DEBUG
+    ret += "visit global value\n";
+#endif
     ret += Visit(program.values);
     // 访问所有函数
+#ifdef DEBUG
+    ret += "visit functions\n";
+#endif
     ret += Visit(program.funcs);
 
     std::string optimized_code = optimize_riscv_code(ret);
@@ -97,6 +102,9 @@ std::string Visit(const koopa_raw_program_t &program)
 std::string Visit(const koopa_raw_slice_t &slice)
 {
     std::string ret = "";
+#ifdef DEBUG
+    ret += "visit slice\n";
+#endif
     for (size_t i = 0; i < slice.len; ++i)
     {
         auto ptr = slice.buffer[i];
@@ -128,6 +136,9 @@ std::string Visit(const koopa_raw_function_t &func)
 {
     // 忽略函数声明
     std::string ret = "";
+#ifdef DEBUG
+    ret += "visit function\n";
+#endif
     if (func->bbs.len == 0)
         return ret;
 
@@ -151,7 +162,6 @@ std::string Visit(const koopa_raw_function_t &func)
     for (size_t i = 0; i < func->bbs.len; ++i)
     {
         const auto &insts = reinterpret_cast<koopa_raw_basic_block_t>(func->bbs.buffer[i])->insts;
-        var_count += insts.len;
         for (size_t j = 0; j < insts.len; ++j)
         {
             auto inst = reinterpret_cast<koopa_raw_value_t>(insts.buffer[j]);
@@ -180,7 +190,11 @@ std::string Visit(const koopa_raw_function_t &func)
             }
         }
     }
-
+#ifdef DEBUG
+    ret += "var_count: " + std::to_string(var_count) + "\n";
+    ret += "ra_count: " + std::to_string(ra_count) + "\n";
+    ret += "arg_count: " + std::to_string(arg_count) + "\n";
+#endif
     stack.len = (var_count + ra_count + arg_count) * 4;
     // 将栈帧长度对齐到 16
     stack.len = (stack.len + 15) / 16 * 16;
@@ -206,6 +220,9 @@ std::string Visit(const koopa_raw_function_t &func)
 std::string Visit(const koopa_raw_basic_block_t &bb)
 {
     std::string ret = "";
+#ifdef DEBUG
+    ret += "visit basic block\n";
+#endif
     // 执行一些其他的必要操作
     // 当前块的label, %entry开头的不打印
     if (strncmp(bb->name + strlen(bb->name) - 5, "entry", 5) != 0)
@@ -222,6 +239,9 @@ std::string Visit(const koopa_raw_value_t &value)
 {
     // 根据指令类型判断后续需要如何访问
     std::string ret = "";
+#ifdef DEBUG
+    ret += "visit value\n";
+#endif
     const auto &kind = value->kind;
     koopa_raw_type_t base;
     switch (kind.tag)
@@ -234,17 +254,26 @@ std::string Visit(const koopa_raw_value_t &value)
         base = value->ty->data.pointer.base;
         if (base->tag == KOOPA_RTT_INT32)
         {
+#ifdef DEBUG
+            ret += "alloc integer\n";
+#endif
             stack.alloc_value(value, stack.pos);
             stack.pos += 4;
         }
         else if (base->tag == KOOPA_RTT_ARRAY)
         {
+#ifdef DEBUG
+            ret += "alloc array\n";
+#endif
             int arrmem = ptr_size_vec.get_value_total_size(value);
             stack.alloc_value(value, stack.pos);
             stack.pos += arrmem;
         }
         else if (base->tag == KOOPA_RTT_POINTER)
         {
+#ifdef DEBUG
+            ret += "alloc pointer\n";
+#endif
             while (base->tag == KOOPA_RTT_POINTER)
             {
                 ptr_size_vec.push_size(value, 1);
@@ -311,6 +340,9 @@ std::string Visit(const koopa_raw_value_t &value)
 std::string Visit(const koopa_raw_return_t &ret_inst)
 {
     std::string ret = "";
+#ifdef DEBUG
+    ret += "visit return\n";
+#endif
     // 返回值存入 a0
     if (ret_inst.value != nullptr)
     {
@@ -333,13 +365,21 @@ std::string Visit(const koopa_raw_return_t &ret_inst)
 // 访问 integer 指令
 std::string Visit(const koopa_raw_integer_t &integer)
 {
-    return "  li a0, " + std::to_string(integer.value) + "\n";
+    std::string ret = "";
+#ifdef DEBUG
+    ret += "visit integer\n";
+#endif
+    ret += loadint_reg(integer.value, "a0");
+    return ret;
 }
 
 // 访问 binary 指令
 std::string Visit(const koopa_raw_binary_t &binary, const koopa_raw_value_t &value)
 {
     std::string ret = "";
+#ifdef DEBUG
+    ret += "visit binary\n";
+#endif
     // 将运算数存入 t0 和 t1
     ret += loadstack_reg(binary.lhs, "t0");
     ret += loadstack_reg(binary.rhs, "t1");
@@ -418,6 +458,9 @@ std::string Visit(const koopa_raw_binary_t &binary, const koopa_raw_value_t &val
 std::string Visit(const koopa_raw_load_t &load, const koopa_raw_value_t &value)
 {
     std::string ret = "";
+#ifdef DEBUG
+    ret += "visit load\n";
+#endif
     ret += loadstack_reg(load.src, "t0");
 
     if (value_is_ptr(load.src))
@@ -440,6 +483,9 @@ std::string Visit(const koopa_raw_load_t &load, const koopa_raw_value_t &value)
 std::string Visit(const koopa_raw_store_t &store)
 {
     std::string ret = "";
+#ifdef DEBUG
+    ret += "visit store\n";
+#endif
     ret += loadstack_reg(store.value, "t0");
 
     if (value_is_ptr(store.value))
@@ -459,6 +505,9 @@ std::string Visit(const koopa_raw_store_t &store)
 std::string Visit(const koopa_raw_branch_t &branch)
 {
     std::string ret = "";
+#ifdef DEBUG
+    ret += "visit branch\n";
+#endif
     ret += loadstack_reg(branch.cond, "t0");
     ret += "  bnez t0, DOUBLE_JUMP_" + std::string(branch.true_bb->name + 1) + "\n";
     ret += "  j " + std::string(branch.false_bb->name + 1) + "\n";
@@ -471,6 +520,9 @@ std::string Visit(const koopa_raw_branch_t &branch)
 std::string Visit(const koopa_raw_jump_t &jump)
 {
     std::string ret = "";
+#ifdef DEBUG
+    ret += "visit jump\n";
+#endif
     ret += "  j " + std::string(jump.target->name + 1) + "\n";
     return ret;
 }
@@ -479,6 +531,9 @@ std::string Visit(const koopa_raw_jump_t &jump)
 std::string Visit(const koopa_raw_call_t &call, const koopa_raw_value_t &value)
 {
     std::string ret = "";
+#ifdef DEBUG
+    ret += "visit call\n";
+#endif
     // 处理参数
     for (size_t i = 0; i < call.args.len; ++i)
     {
@@ -509,6 +564,9 @@ std::string Visit(const koopa_raw_call_t &call, const koopa_raw_value_t &value)
 std::string Visit(const koopa_raw_global_alloc_t &global_alloc, const koopa_raw_value_t &value)
 {
     std::string ret = "";
+#ifdef DEBUG
+    ret += "visit global alloc\n";
+#endif
     ret += "  .data\n";
     ret += "  .globl " + std::string(value->name + 1) + "\n";
     ret += std::string(value->name + 1) + ":\n";
@@ -555,6 +613,9 @@ std::string Visit(const koopa_raw_global_alloc_t &global_alloc, const koopa_raw_
 std::string Visit(const koopa_raw_get_ptr_t &get_ptr, const koopa_raw_value_t &value)
 {
     std::string ret = "";
+#ifdef DEBUG
+    ret += "visit getptr\n";
+#endif
     ret += loadaddr_reg(get_ptr.src, "t0");
     if (value_is_ptr(get_ptr.src))
     {
@@ -583,6 +644,9 @@ std::string Visit(const koopa_raw_get_ptr_t &get_ptr, const koopa_raw_value_t &v
 std::string Visit(const koopa_raw_get_elem_ptr_t &get_elem_ptr, const koopa_raw_value_t &value)
 {
     std::string ret = "";
+#ifdef DEBUG
+    ret += "visit getelemptr\n";
+#endif
     ret += loadaddr_reg(get_elem_ptr.src, "t0");
     if (value_is_ptr(get_elem_ptr.src))
     {
