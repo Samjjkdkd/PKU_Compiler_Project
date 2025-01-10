@@ -461,12 +461,21 @@ std::string Visit(const koopa_raw_load_t &load, const koopa_raw_value_t &value)
 #ifdef DEBUG
     ret += "visit load\n";
 #endif
-    ret += loadstack_reg(load.src, "t0");
-
-    if (value_is_ptr(load.src))
+    switch (load.src->kind.tag)
     {
+    case KOOPA_RVT_GLOBAL_ALLOC:
+        ret += loadaddr_reg(load.src, "t0");
         ret += "  lw t0, 0(t0)\n";
-    }
+        break;
+    case KOOPA_RVT_GET_PTR:
+    case KOOPA_RVT_GET_ELEM_PTR:
+        ret += loadstack_reg(load.src, "t0");
+        ret += "  lw t0, 0(t0)\n";
+        break;
+    default:
+        ret += loadstack_reg(load.src, "t0");
+        break;
+    };
 
     if (value->ty->tag != KOOPA_RTT_UNIT)
     {
@@ -785,24 +794,6 @@ std::string aggregate_init(const koopa_raw_value_t &value)
         }
     }
     return ret;
-}
-
-// value->kind.tag 为 KOOPA_RVT_GET_PTR 或 KOOPA_RVT_GET_ELEM_PTR,
-// 或者是 KOOPA_RVT_GET_LOAD 且 load 的是函数开始保存数组参数的位置
-bool value_is_ptr(const koopa_raw_value_t &value)
-{
-    if (value->kind.tag == KOOPA_RVT_GET_PTR)
-        return 1;
-    if (value->kind.tag == KOOPA_RVT_GET_ELEM_PTR)
-        return 1;
-    if (value->kind.tag == KOOPA_RVT_LOAD)
-    {
-        const auto &load = value->kind.data.load;
-        if (load.src->kind.tag == KOOPA_RVT_ALLOC)
-            if (load.src->ty->data.pointer.base->tag == KOOPA_RTT_POINTER)
-                return 1;
-    }
-    return 0;
 }
 
 std::string deal_offset_exceed(int offset, std::string inst, std::string reg)

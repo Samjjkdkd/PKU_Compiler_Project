@@ -110,14 +110,6 @@ std::string Visit(const koopa_raw_return_t &ret);
 /************************************************Utils*****************************************************/
 /**********************************************************************************************************/
 
-// 生成数组/指针的 (global) alloc 语句 -> 该数组/指针的维数.
-// [[i32, 2], 3] -> 3, 2; **[[i32, 2], 3] ->  1, 1, 3, 2
-static std::unordered_map<koopa_raw_value_t, std::vector<int>> dimvec;
-// getelemptr 和 getptr 语句 -> 生成的指针的维数,
-// 表示为 dimvec 中的 vector 的某段的 begin 和 end
-typedef std::pair<std::vector<int>::iterator, std::vector<int>::iterator> pvitvit;
-static std::unordered_map<koopa_raw_value_t, pvitvit> dimlr;
-
 // 将 stack 中的值 加载到 reg 中
 std::string loadstack_reg(const koopa_raw_value_t &value, const std::string &reg);
 
@@ -129,9 +121,6 @@ std::string loadint_reg(int value, const std::string &reg);
 
 // 将 reg 中的值存回 value
 std::string save_reg(const koopa_raw_value_t &value, const std::string &reg);
-
-// 判断 value 是否为指针
-bool value_is_ptr(const koopa_raw_value_t &value);
 
 // 生成aggregate
 std::string aggregate_init(const koopa_raw_value_t &value);
