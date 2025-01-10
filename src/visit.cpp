@@ -444,13 +444,10 @@ std::string Visit(const koopa_raw_binary_t &binary, const koopa_raw_value_t &val
         break;
     }
 
-    // 将结果存回
-    if (value->ty->tag != KOOPA_RTT_UNIT)
-    {
-        stack.alloc_value(value, stack.pos);
-        stack.pos += 4;
-        ret += save_reg(value, "t0");
-    }
+    stack.alloc_value(value, stack.pos);
+    stack.pos += 4;
+    ret += save_reg(value, "t0");
+
     return ret;
 }
 
@@ -477,14 +474,12 @@ std::string Visit(const koopa_raw_load_t &load, const koopa_raw_value_t &value)
         break;
     };
 
-    if (value->ty->tag != KOOPA_RTT_UNIT)
-    {
-        ptr_size_vec.copy_size_vec(value, load.src);
-        // 存入栈
-        stack.alloc_value(value, stack.pos);
-        stack.pos += 4;
-        ret += save_reg(value, "t0");
-    }
+    ptr_size_vec.copy_size_vec(value, load.src);
+    // 存入栈
+    stack.alloc_value(value, stack.pos);
+    stack.pos += 4;
+    ret += save_reg(value, "t0");
+
     return ret;
 }
 
@@ -639,15 +634,12 @@ std::string Visit(const koopa_raw_get_ptr_t &get_ptr, const koopa_raw_value_t &v
     ret += "  mul t1, t1, t2\n";
     ret += "  add t0, t0, t1\n";
 
-    // 若有返回值则将 t0 中的结果存入栈
-    if (value->ty->tag != KOOPA_RTT_UNIT)
-    {
-        ptr_size_vec.copy_size_vec_ptr(value, get_ptr.src);
-        // 存入栈
-        stack.alloc_value(value, stack.pos);
-        stack.pos += 4;
-        ret += save_reg(value, "t0");
-    }
+    ptr_size_vec.copy_size_vec_ptr(value, get_ptr.src);
+    // 存入栈
+    stack.alloc_value(value, stack.pos);
+    stack.pos += 4;
+    ret += save_reg(value, "t0");
+
     return ret;
 }
 
@@ -671,15 +663,12 @@ std::string Visit(const koopa_raw_get_elem_ptr_t &get_elem_ptr, const koopa_raw_
     ret += "  mul t1, t1, t2\n";
     ret += "  add t0, t0, t1\n";
 
-    // 若有返回值则将 t0 中的结果存入栈
-    if (value->ty->tag != KOOPA_RTT_UNIT)
-    {
-        ptr_size_vec.copy_size_vec_ptr(value, get_elem_ptr.src);
-        // 存入栈
-        stack.alloc_value(value, stack.pos);
-        stack.pos += 4;
-        ret += save_reg(value, "t0");
-    }
+    ptr_size_vec.copy_size_vec_ptr(value, get_elem_ptr.src);
+    // 存入栈
+    stack.alloc_value(value, stack.pos);
+    stack.pos += 4;
+    ret += save_reg(value, "t0");
+
     return ret;
 }
 
