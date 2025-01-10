@@ -202,7 +202,7 @@ std::string Visit(const koopa_raw_function_t &func)
 
     if (stack.len != 0)
     {
-        ret += deal_offset_exceed(stack.len, "addi-", "t0");
+        ret += deal_offset_exceed(stack.len, "addi-", "sp");
     }
 
     if (ra_count)
@@ -356,7 +356,7 @@ std::string Visit(const koopa_raw_return_t &ret_inst)
     // 恢复栈帧
     if (stack.len != 0)
     {
-        ret += deal_offset_exceed(stack.len, "addi+", "t0");
+        ret += deal_offset_exceed(stack.len, "addi+", "sp");
     }
     ret += "  ret\n";
     return ret;
@@ -486,18 +486,24 @@ std::string Visit(const koopa_raw_store_t &store)
 #ifdef DEBUG
     ret += "visit store\n";
 #endif
-    ret += loadstack_reg(store.value, "t0");
-
-    if (value_is_ptr(store.value))
+    switch (store.dest->kind.tag)
     {
-        ret += "  lw t0, 0(t0)\n";
-    }
-    ret += loadaddr_reg(store.dest, "t1");
-    if (value_is_ptr(store.dest))
-    {
-        ret += "  lw t1, 0(t1)\n";
-    }
-    ret += "  sw t0, 0(t1)\n";
+    case KOOPA_RVT_GLOBAL_ALLOC:
+        ret += loadstack_reg(store.value, "t0");
+        ret += loadaddr_reg(store.dest, "t1");
+        ret += "  sw t0, 0(t1)\n";
+        break;
+    case KOOPA_RVT_GET_PTR:
+    case KOOPA_RVT_GET_ELEM_PTR:
+        ret += loadstack_reg(store.value, "t0");
+        ret += loadstack_reg(store.dest, "t1");
+        ret += "  sw t0, 0(t1)\n";
+        break;
+    default:
+        ret += loadstack_reg(store.value, "t0");
+        ret += save_reg(store.dest, "t0");
+        break;
+    };
     return ret;
 }
 
@@ -617,11 +623,7 @@ std::string Visit(const koopa_raw_get_ptr_t &get_ptr, const koopa_raw_value_t &v
     ret += "visit getptr\n";
 #endif
     ret += loadaddr_reg(get_ptr.src, "t0");
-    if (value_is_ptr(get_ptr.src))
-    {
-        ret += "  lw t0, 0(t0)\n";
-    }
-
+    ret += "  lw t0, 0(t0)\n";
     int offset = ptr_size_vec.get_value_offset(get_ptr.src);
     ret += loadstack_reg(get_ptr.index, "t1");
     ret += loadint_reg(offset, "t2");
@@ -648,7 +650,8 @@ std::string Visit(const koopa_raw_get_elem_ptr_t &get_elem_ptr, const koopa_raw_
     ret += "visit getelemptr\n";
 #endif
     ret += loadaddr_reg(get_elem_ptr.src, "t0");
-    if (value_is_ptr(get_elem_ptr.src))
+    if (get_elem_ptr.src->kind.tag == KOOPA_RVT_GET_ELEM_PTR ||
+        get_elem_ptr.src->kind.tag == KOOPA_RVT_GET_PTR)
     {
         ret += "  lw t0, 0(t0)\n";
     }
@@ -732,8 +735,7 @@ std::string loadaddr_reg(const koopa_raw_value_t &value, const std::string &reg)
         ret += "  la " + reg + ", " + std::string(value->name + 1) + "\n";
         break;
     default:
-        ret += loadint_reg(stack.get_loc(value), reg);
-        ret += "  add " + reg + ", " + reg + ", sp\n";
+        ret += deal_offset_exceed(stack.get_loc(value), "addi+", reg);
         break;
     }
     return ret;
@@ -833,24 +835,24 @@ std::string deal_offset_exceed(int offset, std::string inst, std::string reg)
     {
         if (offset < -2048 || offset > 2047)
         {
-            ret += "  li " + reg + ", " + std::to_string(offset) + "\n";
-            ret += "  sub sp, sp, " + reg + "\n";
+            ret += "  li t0, " + std::to_string(offset) + "\n";
+            ret += "  sub " + reg + ", sp, t0\n";
         }
         else
         {
-            ret += "  addi sp, sp, -" + std::to_string(offset) + "\n";
+            ret += "  addi " + reg + ", sp, -" + std::to_string(offset) + "\n";
         }
     }
     else if (inst == "addi+")
     {
         if (offset < -2048 || offset > 2047)
         {
-            ret += "  li " + reg + ", " + std::to_string(offset) + "\n";
-            ret += "  add sp, sp, " + reg + "\n";
+            ret += "  li t0, " + std::to_string(offset) + "\n";
+            ret += "  add " + reg + ", sp, t0\n";
         }
         else
         {
-            ret += "  addi sp, sp, " + std::to_string(offset) + "\n";
+            ret += "  addi " + reg + ", sp, " + std::to_string(offset) + "\n";
         }
     }
     return ret;
